@@ -1,0 +1,25 @@
+{
+  "name": "sky-scraper",
+  "version": "0.1.0",
+  "description": "Sky Scraper (摩天大楼) - Physics-based tower stacking game",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  },
+  "keywords": [
+    "game",
+    "threejs",
+    "physics",
+    "stacking"
+  ],
+  "author": "",
+  "license": "MIT"
+}
