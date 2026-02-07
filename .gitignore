@@ -15,7 +15,6 @@ build/
 .env.*.local
 
 # Editor directories and files
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -37,3 +36,7 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+
+# Test artifacts
+tests/.playwright-mcp/
+tests/screenshots/*.png
