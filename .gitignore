@@ -40,3 +40,43 @@ Thumbs.db
 # Test artifacts
 tests/.playwright-mcp/
 tests/screenshots/*.png
+
+# Sensitive conversation data
+# Sensitive conversation data
+chat/conversations/*-sensitive.md
+chat/conversations/*-private.md
+chat/conversations/*-secret.md
+
+# Temporary conversation drafts
+chat/conversations/draft-*.md
+chat/conversations/temp-*.md
+
+# Personal notes
+**/personal/
+**/private/
+
+# API keys and credentials
+*.env
+*.env.local
+.env.*
+**/secrets/
+**/credentials/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node modules (for future development)
+node_modules/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
