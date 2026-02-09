@@ -13,6 +13,10 @@ import { CameraController } from '../rendering/camera.js';
 import { JudgmentSystem } from '../systems/judgment.js';
 import { ComboSystem } from '../systems/combo.js';
 import { PhaseManager } from '../systems/phase.js';
+import { TOWER_SWAY, VERTICAL_OSCILLATION, IMPACT_FORCE } from '../../config/physics_params.js';
+
+// 楼层显示缩放比例
+const FLOOR_DISPLAY_SCALE = 0.6;
 
 export class Game {
   constructor(canvas) {
@@ -26,7 +30,7 @@ export class Game {
     this.currentFloorId = 0;
     this.fallingFloor = null;
 
-    // Tower sway state (global physics)
+    // Tower sway state (spring-damper physics with oscillation)
     this.towerSwayAngle = 0;
     this.towerSwayVelocity = 0;
 
@@ -57,6 +61,27 @@ export class Game {
         this.togglePause();
       } else if (e.code === 'KeyR') {
         this.restart();
+      } else if (e.code === 'KeyT' && !this.isPaused) {
+        // 测试模式：快速添加 10 层
+        this.addTestFloors(10);
+      } else if (e.code === 'Digit1') {
+        // 跳到第 5 层（测试 Phase 1）
+        this.jumpToFloor(5);
+      } else if (e.code === 'Digit2') {
+        // 跳到第 20 层（测试 Phase 2）
+        this.jumpToFloor(20);
+      } else if (e.code === 'Digit3') {
+        // 跳到第 40 层（测试 Phase 3）
+        this.jumpToFloor(40);
+      } else if (e.code === 'Digit4') {
+        // 跳到第 65 层（测试 Phase 4）
+        this.jumpToFloor(65);
+      } else if (e.code === 'Digit5') {
+        // 跳到第 100 层（测试 Phase 5）
+        this.jumpToFloor(100);
+      } else if (e.code === 'Digit6') {
+        // 跳到第 125 层（测试 Phase 6）
+        this.jumpToFloor(125);
       }
     });
 
@@ -80,21 +105,29 @@ export class Game {
    */
   start() {
     console.log('Game starting...');
-    this.isRunning = true;
+    console.log('Loading assets...');
 
-    // Place first floor at ground center
-    this.placeFirstFloor();
+    // Load textures first
+    this.sceneManager.loadFloorTexture(() => {
+      console.log('Assets loaded, starting game...');
+      this.isRunning = true;
 
-    // Start game loop
-    this.lastTime = performance.now();
-    this.gameLoop();
+      // Place first floor at ground center
+      this.placeFirstFloor();
+
+      // Start game loop
+      this.lastTime = performance.now();
+      this.gameLoop();
+    });
   }
 
   /**
    * Place the first floor (id = 0)
    */
   placeFirstFloor() {
-    const firstFloor = new Floor(0, { x: 0, y: 0 }, 4.0, 0.5, 1);
+    // 地基位置：画面底部 1/5 位置（相机范围 -10 到 10，总高度 20）
+    const groundY = -10 + 20 * 0.2; // = -6
+    const firstFloor = new Floor(0, { x: 0, y: groundY }, 4.0, 0.5, 1);
     firstFloor.isStable = true;
     this.floors.push(firstFloor);
     this.sceneManager.addFloor(firstFloor);
@@ -113,8 +146,8 @@ export class Game {
     const newFloor = new Floor(
       this.currentFloorId,
       { x: prevFloor.position.x, y: prevFloor.position.y + 5 },
-      prevFloor.width,
-      0.5,
+      4.0,
+      4.0,
       phase
     );
     this.crane.attachFloor(newFloor);
@@ -152,10 +185,28 @@ export class Game {
       return;
     }
 
-    // Note: Sway is now calculated based on real-time CoM, not triggered here
+    // Apply impact force to tower when floor lands
+    // The offset creates an impulse that triggers oscillation
+    const offset = floor.position.x - prevFloor.position.x;
+    const impactForce = offset * IMPACT_FORCE.MULTIPLIER;
+    this.towerSwayVelocity += impactForce;
+
+    // Apply vertical impact (downward push when landing)
+    // This creates the bounce effect
+    floor.verticalVelocity = VERTICAL_OSCILLATION.INITIAL_IMPACT;
+
+    // Also apply smaller impact to floors below (propagate impact)
+    const impactPropagationCount = Math.min(VERTICAL_OSCILLATION.PROPAGATION_LAYERS, this.floors.length);
+    for (let i = 0; i < impactPropagationCount; i++) {
+      const floorIndex = this.floors.length - 1 - i;
+      const impactedFloor = this.floors[floorIndex];
+      const propagationFactor = 1.0 - (i / impactPropagationCount); // Decay with distance
+      impactedFloor.verticalVelocity += VERTICAL_OSCILLATION.INITIAL_IMPACT * propagationFactor * VERTICAL_OSCILLATION.PROPAGATION_STRENGTH;
+    }
 
     // Set floor Y position to stack on top of previous floor
-    floor.position.y = prevFloor.position.y + prevFloor.height;
+    // Sprite 基于中心点定位，需要考虑两个楼层的半高
+    floor.position.y = prevFloor.position.y + (prevFloor.height + floor.height) * FLOOR_DISPLAY_SCALE / 2;
 
     // Update sprite position
     if (floor.sprite) {
@@ -205,7 +256,7 @@ export class Game {
 
     // Set initial position
     const prevFloor = this.floors[this.floors.length - 1];
-    floor.position.y = prevFloor.position.y + prevFloor.height;
+    floor.position.y = prevFloor.position.y + (prevFloor.height + floor.height) * FLOOR_DISPLAY_SCALE / 2;
 
     if (floor.sprite) {
       floor.sprite.position.x = floor.position.x;
@@ -306,31 +357,104 @@ export class Game {
   }
 
   /**
-   * Apply sway visuals using pivot rotation
-   * Floors below pivot: no rotation
-   * Floors above pivot: increasing rotation (simulates bending)
+   * 测试方法：快速添加多层楼
+   */
+  addTestFloors(count) {
+    console.log(`测试模式：快速添加 ${count} 层`);
+    for (let i = 0; i < count; i++) {
+      const prevFloor = this.floors[this.floors.length - 1];
+      const phase = this.phaseManager.getCurrentPhase(this.floors.length);
+      const newFloor = new Floor(
+        this.currentFloorId,
+        {
+          x: prevFloor.position.x,
+          y: prevFloor.position.y + (prevFloor.height + 4.0) * FLOOR_DISPLAY_SCALE / 2
+        },
+        4.0,
+        4.0,
+        phase
+      );
+      newFloor.isStable = true;
+      this.floors.push(newFloor);
+      this.sceneManager.addFloor(newFloor);
+      this.currentFloorId++;
+    }
+    this.prepareNextFloor();
+    this.updateUI();
+    console.log(`当前楼层：${this.floors.length}`);
+  }
+
+  /**
+   * 测试方法：跳到指定楼层
+   */
+  jumpToFloor(targetFloor) {
+    console.log(`测试模式：跳到第 ${targetFloor} 层`);
+    const currentFloors = this.floors.length;
+    if (targetFloor > currentFloors) {
+      this.addTestFloors(targetFloor - currentFloors);
+    }
+  }
+
+  /**
+   * Apply sway visuals using progressive rotation
+   * Creates a bending effect on the top floors
+   * Each floor rotates progressively more, simulating elastic deformation
    */
   applySwayVisuals() {
     if (this.floors.length === 0) return;
 
-    // Determine pivot point: 10 floors down from top
-    const pivotIndex = Math.max(0, this.floors.length - 10);
+    // Use configured pivot point offset
+    const pivotIndex = Math.max(0, this.floors.length - TOWER_SWAY.PIVOT_OFFSET);
 
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
       if (index < pivotIndex) {
-        // Below pivot: no rotation
+        // Below pivot: no rotation, reset to original position
         floor.sprite.rotation.z = 0;
+        floor.sprite.position.x = floor.position.x;
       } else {
-        // Above pivot: increasing rotation (simulates bending)
-        const heightRatio = (index - pivotIndex) / 10;
+        // Above pivot: progressive rotation (bending effect)
+        const floorsAbovePivot = this.floors.length - pivotIndex;
+        const linearRatio = (index - pivotIndex) / floorsAbovePivot;
+
+        // Use cubic curve for more dramatic effect
+        // This creates a smooth curve that looks more organic
+        const heightRatio = linearRatio * linearRatio * linearRatio;
+
+        // Progressive rotation: each floor rotates more than the one below
         floor.sprite.rotation.z = this.towerSwayAngle * heightRatio;
 
-        // Adjust position to simulate bending (increased for more visible effect)
-        const bendOffset = Math.sin(this.towerSwayAngle) * heightRatio * 1.0;
+        // Horizontal displacement (bending) using configured coefficient
+        const bendOffset = Math.sin(this.towerSwayAngle) * heightRatio * TOWER_SWAY.BEND_COEFFICIENT;
         floor.sprite.position.x = floor.position.x + bendOffset;
       }
+    });
+  }
+
+  /**
+   * Update vertical oscillation for all floors
+   * Creates bounce effect when floors land
+   */
+  updateFloorOscillations(deltaTime) {
+    this.floors.forEach((floor) => {
+      if (!floor.sprite) return;
+
+      // Skip if floor is already stable and has no oscillation
+      if (floor.isStable && Math.abs(floor.verticalOffset) < 0.001) return;
+
+      // Update oscillation physics
+      const result = Physics.updateFloorVerticalOscillation(floor, deltaTime);
+      floor.verticalOffset = result.offset;
+      floor.verticalVelocity = result.velocity;
+
+      // Mark as stable if oscillation has stopped
+      if (result.isStable) {
+        floor.isStable = true;
+      }
+
+      // Apply vertical offset to sprite
+      floor.sprite.position.y = floor.position.y + floor.verticalOffset;
     });
   }
 
@@ -363,7 +487,7 @@ export class Game {
       return;
     }
 
-    // Update tower sway physics based on real-time center of mass
+    // Update tower sway based on center of mass (player placement accuracy)
     if (this.floors.length > 0) {
       // Calculate center of mass offset
       const comOffset = Physics.calculateTowerCenterOfMassOffset(this.floors);
@@ -371,22 +495,22 @@ export class Game {
       // Calculate target angle based on CoM offset
       const targetAngle = Physics.calculateTargetSwayAngle(comOffset, this.floors.length);
 
-      // Calculate stiffness
-      const stiffness = Physics.calculateStiffness(this.floors.length);
-
-      // Update sway angle (smooth transition to target)
+      // Update sway angle using spring-damper physics (creates oscillation)
       const swayResult = Physics.updateTowerSway(
         this.towerSwayAngle,
         this.towerSwayVelocity,
         targetAngle,
-        stiffness,
-        deltaTime
+        deltaTime,
+        this.floors.length
       );
       this.towerSwayAngle = swayResult.angle;
       this.towerSwayVelocity = swayResult.velocity;
 
       // Apply pivot rotation visual effect
       this.applySwayVisuals();
+
+      // Update vertical oscillation for all floors
+      this.updateFloorOscillations(deltaTime);
     }
 
     // Update crane position

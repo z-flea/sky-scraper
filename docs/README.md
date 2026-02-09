@@ -1,115 +1,106 @@
-# Sky Scraper (摩天大楼)
+# 代码审查与参数管理系统
 
-A physics-based tower stacking game built with Three.js.
+## 系统概述
 
-## Project Structure
+本系统提供了一套完整的代码审查和参数迭代管理方案，包括：
+
+1. **代码审查清单** - 提交前的自查标准
+2. **参数历史记录** - 系统化的参数调整追踪
+3. **集中参数配置** - 避免硬编码魔法数字
+4. **设计决策记录** - 重要技术决策的文档化
+5. **Git提交规范** - 统一的提交信息格式
+6. **工作流程指南** - 日常开发的标准流程
+
+---
+
+## 文件结构
 
 ```
 game3/
-├── src/
-│   ├── core/              # Core game logic
-│   │   ├── floor.js       # Floor class
-│   │   ├── crane.js       # Mechanical arm system
-│   │   ├── physics.js     # Physics calculations
-│   │   └── game.js        # Main game loop
-│   ├── systems/           # Game systems
-│   │   ├── judgment.js    # Judgment system
-│   │   ├── combo.js       # Combo system
-│   │   └── phase.js       # Phase progression
-│   ├── rendering/         # Rendering
-│   │   ├── scene.js       # Three.js scene setup
-│   │   ├── camera.js      # Camera controller
-│   │   └── effects.js     # Post-processing effects
-│   ├── ui/                # User interface
-│   │   ├── hud.js         # In-game UI
-│   │   └── menu.js        # Menu system
-│   ├── assets/            # Asset loading
-│   │   ├── sprite_loader.js
-│   │   └── audio_manager.js
-│   └── main.js            # Entry point
-├── assets/                # Asset files
-│   ├── sprites/           # 2D sprite images
-│   ├── textures/          # Texture atlases
-│   ├── audio/             # Sound effects and music
-│   └── fonts/             # Font files
-├── index.html             # HTML entry point
-├── package.json           # Dependencies
-├── CLAUDE.md              # AI context documentation
-├── 策划.md                # Game design document (Chinese)
-└── README.md              # This file
+├── docs/
+│   ├── code_review_checklist.md    # 代码审查清单
+│   ├── parameter_history.md        # 参数调整历史
+│   ├── design_decisions.md         # 设计决策记录
+│   ├── workflow.md                 # 工作流程指南
+│   └── README.md                   # 本文件
+├── config/
+│   └── physics_params.js           # 集中的物理参数配置
+└── .gitmessage                     # Git提交信息模板
 ```
 
-## Getting Started
+---
 
-### Prerequisites
+## 快速开始
 
-- Node.js (v16 or higher)
-- npm or yarn
+### 1. 配置Git提交模板
 
-### Installation
-
-1. Install dependencies:
 ```bash
-npm install
+git config commit.template .gitmessage
 ```
 
-### Development
+### 2. 参数调整流程
 
-Start the development server:
+```
+修改参数 → 测试验证 → 记录历史 → 提交代码
+```
+
+### 3. 代码提交流程
+
+```
+修改代码 → 查看清单 → 测试功能 → 提交代码
+```
+
+---
+
+## 核心原则
+
+### 1. 参数集中管理
+
+**✅ 正确做法：**
+```javascript
+import { TOWER_SWAY } from '../config/physics_params.js';
+const damping = TOWER_SWAY.DAMPING;
+```
+
+### 2. 修改必须记录
+
+每次修改参数后，必须在 `parameter_history.md` 中记录。
+
+### 3. 重要决策文档化
+
+重大技术决策记录在 `design_decisions.md` 中。
+
+---
+
+## 使用场景
+
+### 调整物理参数
+
 ```bash
-npm run dev
+# 1. 修改参数
+vim config/physics_params.js
+
+# 2. 测试验证
+npm start
+
+# 3. 记录调整
+vim docs/parameter_history.md
+
+# 4. 提交代码
+git add config/physics_params.js docs/parameter_history.md
+git commit
 ```
 
-The game will be available at `http://localhost:5173` (or another port if 5173 is in use).
+---
 
-### Build
+## 相关文档
 
-Build for production:
-```bash
-npm run build
-```
+- [代码审查清单](code_review_checklist.md)
+- [参数历史记录](parameter_history.md)
+- [设计决策记录](design_decisions.md)
+- [工作流程指南](workflow.md)
 
-The built files will be in the `dist/` directory.
+---
 
-## Controls
-
-- **Space** or **Left Click**: Release floor
-- **ESC**: Pause game
-- **R**: Quick restart
-
-## Game Mechanics
-
-### Judgment System
-- **Perfect** (< 5% offset): +100 points, magnetic correction, -10 instability
-- **Great** (5-20% offset): +50 points, +5 instability
-- **Okay** (20-50% offset): +10 points, +20 instability
-- **Miss** (≥ 50% offset): Game over
-
-### Combo System
-- **3 Combo**: Reduces instability by 50%
-- **5 Combo**: Next floor width +10%
-- **10 Combo**: Miracle repair - aligns last 10 floors
-
-### Phases
-1. **City** (0-20 floors): Modern city theme
-2. **Clouds** (21-50 floors): Art Deco style
-3. **Stratosphere** (51-100 floors): Cyberpunk theme
-4. **Orbit** (101-200 floors): Space station
-5. **Interstellar** (200+ floors): Cosmic theme
-
-## Development Status
-
-✅ Project structure initialized
-✅ Core game systems implemented (placeholder)
-⏳ Art assets (using colored rectangles as placeholders)
-⏳ Sound effects and music
-⏳ Visual effects and polish
-
-## Documentation
-
-- [CLAUDE.md](CLAUDE.md) - Technical documentation for AI assistants
-- [策划.md](策划.md) - Complete game design document (Chinese)
-
-## License
-
-MIT
+**系统版本：** 1.0  
+**创建日期：** 2026-02-09
