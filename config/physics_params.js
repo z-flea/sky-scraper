@@ -37,9 +37,10 @@ export const TOWER_SWAY = {
   // 单位：弧度/单位偏移
   // 范围：0.1 - 1.0
   // 物理意义：建筑对质心偏移的响应程度
-  SENSITIVITY_BASE: 0.3,     // 基础敏感度（1-20层）
-  SENSITIVITY_MAX: 0.8,      // 最大敏感度（100+层）
-  SENSITIVITY_INCREMENT: 0.005,  // 每层增加的敏感度
+  // 修改：2026-02-09 固定为 0.4（用户要求）
+  SENSITIVITY_BASE: 0.4,     // 固定敏感度（所有楼层）
+  SENSITIVITY_MAX: 0.4,      // 固定敏感度（所有楼层）
+  SENSITIVITY_INCREMENT: 0.0,  // 不再随楼层增加
 
   // PARAM: 倒塌阈值（Collapse Threshold）
   // 作用：超过此角度建筑倒塌
@@ -92,7 +93,8 @@ export const VERTICAL_OSCILLATION = {
   // 作用：楼层落地时的初始向下冲击
   // 单位：单位/秒（速度）
   // 范围：-0.3 - -0.05
-  INITIAL_IMPACT: -0.15,
+  // 修改：2026-02-09 设置为 0 禁用垂直弹跳（用户要求）
+  INITIAL_IMPACT: 0,
 
   // PARAM: 冲击传播强度（Impact Propagation Strength）
   // 作用：冲击向下传播的强度系数
