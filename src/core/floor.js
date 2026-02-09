@@ -17,6 +17,15 @@ export class Floor {
     this.sprite = null; // Will be set by rendering system
     this.phase = phase;
     this.isStable = false;
+
+    // Vertical oscillation state (for bounce effect when landing)
+    this.verticalOffset = 0; // Current vertical displacement
+    this.verticalVelocity = 0; // Vertical velocity
+
+    // Landing rotation state (for impact rotation when landing)
+    this.landingRotation = 0; // Current rotation angle (radians)
+    this.landingRotationVelocity = 0; // Rotation velocity
+    this.landingRotationStable = true; // Whether rotation has stabilized
   }
 
   /**

@@ -7,6 +7,7 @@
 import {
   TOWER_SWAY,
   VERTICAL_OSCILLATION,
+  LANDING_ROTATION,
   calculateStiffness,
   calculateSensitivity,
   calculateCollapseThreshold
@@ -209,5 +210,39 @@ export class Physics {
     }
 
     return { collapse: false };
+  }
+
+  /**
+   * Update floor landing rotation (impact rotation when landing)
+   * Uses spring-damper physics for realistic rotation and quick stabilization
+   *
+   * @param {Floor} floor - Floor object to update
+   * @param {number} deltaTime - Time step
+   * @returns {object} New rotation angle and velocity
+   */
+  static updateFloorLandingRotation(floor, deltaTime) {
+    // Use configured landing rotation parameters
+    const stiffness = LANDING_ROTATION.STIFFNESS;
+    const damping = LANDING_ROTATION.DAMPING;
+
+    // Target rotation is 0 (no rotation)
+    const displacement = 0 - floor.landingRotation;
+    const springForce = displacement * stiffness;
+    const dampingForce = -floor.landingRotationVelocity * damping;
+
+    // Total acceleration
+    const acceleration = springForce + dampingForce;
+
+    // Update velocity and rotation
+    const newVelocity = floor.landingRotationVelocity + acceleration * deltaTime;
+    const newRotation = floor.landingRotation + newVelocity * deltaTime;
+
+    // Stop rotation if amplitude is very small (stabilized)
+    if (Math.abs(newRotation) < LANDING_ROTATION.STABILITY_ANGLE_THRESHOLD &&
+        Math.abs(newVelocity) < LANDING_ROTATION.STABILITY_VELOCITY_THRESHOLD) {
+      return { rotation: 0, velocity: 0, isStable: true };
+    }
+
+    return { rotation: newRotation, velocity: newVelocity, isStable: false };
   }
 }

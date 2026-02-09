@@ -13,7 +13,7 @@ import { CameraController } from '../rendering/camera.js';
 import { JudgmentSystem } from '../systems/judgment.js';
 import { ComboSystem } from '../systems/combo.js';
 import { PhaseManager } from '../systems/phase.js';
-import { TOWER_SWAY, VERTICAL_OSCILLATION, IMPACT_FORCE } from '../../config/physics_params.js';
+import { TOWER_SWAY, VERTICAL_OSCILLATION, IMPACT_FORCE, LANDING_ROTATION } from '../../config/physics_params.js';
 
 // 楼层显示缩放比例
 const FLOOR_DISPLAY_SCALE = 0.6;
@@ -190,6 +190,13 @@ export class Game {
     const offset = floor.position.x - prevFloor.position.x;
     const impactForce = offset * IMPACT_FORCE.MULTIPLIER;
     this.towerSwayVelocity += impactForce;
+
+    // Apply landing rotation (impact rotation when landing)
+    // Rotation direction: left offset = counter-clockwise (negative), right offset = clockwise (positive)
+    const initialRotation = offset * LANDING_ROTATION.SENSITIVITY;
+    floor.landingRotation = initialRotation;
+    floor.landingRotationVelocity = 0;
+    floor.landingRotationStable = false;
 
     // Apply vertical impact (downward push when landing)
     // This creates the bounce effect
@@ -459,6 +466,33 @@ export class Game {
   }
 
   /**
+   * Update landing rotation for all floors
+   * Creates impact rotation effect when floors land
+   */
+  updateFloorLandingRotations(deltaTime) {
+    this.floors.forEach((floor) => {
+      if (!floor.sprite) return;
+
+      // Skip if floor rotation is already stable
+      if (floor.landingRotationStable) return;
+
+      // Update landing rotation physics
+      const result = Physics.updateFloorLandingRotation(floor, deltaTime);
+      floor.landingRotation = result.rotation;
+      floor.landingRotationVelocity = result.velocity;
+
+      // Mark as stable if rotation has stopped
+      if (result.isStable) {
+        floor.landingRotationStable = true;
+      }
+
+      // Apply rotation to sprite
+      // Note: This rotation is independent of tower sway rotation
+      floor.sprite.rotation.z = floor.landingRotation;
+    });
+  }
+
+  /**
    * Main game loop
    */
   gameLoop() {
@@ -511,6 +545,9 @@ export class Game {
 
       // Update vertical oscillation for all floors
       this.updateFloorOscillations(deltaTime);
+
+      // Update landing rotation for all floors
+      this.updateFloorLandingRotations(deltaTime);
     }
 
     // Update crane position
