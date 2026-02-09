@@ -138,7 +138,8 @@ export const LANDING_ROTATION = {
   // 单位：弧度/单位偏移
   // 范围：0.1 - 2.0
   // 物理意义：偏移越大，旋转角度越大
-  SENSITIVITY: 0.5,
+  // 修改：2026-02-09 从 0.5 → 1.5（用户要求，增强旋转效果）
+  SENSITIVITY: 1.5,
 
   // PARAM: 旋转刚度（Rotation Stiffness）
   // 作用：控制回正速度
