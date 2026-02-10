@@ -26,6 +26,8 @@ export class Floor {
     this.landingRotation = 0; // Current rotation angle (radians)
     this.landingRotationVelocity = 0; // Rotation velocity
     this.landingRotationStable = true; // Whether rotation has stabilized
+    this.landingRotationOffset = { x: 0, y: 0 }; // Position offset due to rotation around contact point
+    this.landingContactPointX = 0; // Contact point X relative to center (for pivot rotation)
   }
 
   /**

@@ -193,10 +193,19 @@ export class Game {
 
     // Apply landing rotation (impact rotation when landing)
     // Rotation direction: left offset = counter-clockwise (negative), right offset = clockwise (positive)
+    // Contact point: if floor lands on left, pivot is on right edge; if lands on right, pivot is on left edge
     const initialRotation = offset * LANDING_ROTATION.SENSITIVITY;
     floor.landingRotation = initialRotation;
     floor.landingRotationVelocity = 0;
     floor.landingRotationStable = false;
+
+    // Calculate contact point for pivot rotation
+    // If offset > 0 (lands on right), contact point is on left edge (-W/2)
+    // If offset < 0 (lands on left), contact point is on right edge (+W/2)
+    floor.landingContactPointX = offset > 0 ? -floor.width / 2 : floor.width / 2;
+
+    // Initialize rotation offset (will be calculated in updateFloorLandingRotations)
+    floor.landingRotationOffset = { x: 0, y: 0 };
 
     // Apply vertical impact (downward push when landing)
     // This creates the bounce effect
@@ -417,9 +426,10 @@ export class Game {
       if (!floor.sprite) return;
 
       if (index < pivotIndex) {
-        // Below pivot: no rotation, reset to original position
-        floor.sprite.rotation.z = 0;
-        floor.sprite.position.x = floor.position.x;
+        // Below pivot: no sway rotation, but apply landing rotation if exists
+        floor.sprite.rotation.z = floor.landingRotation || 0;
+        floor.sprite.position.x = floor.position.x + (floor.landingRotationOffset?.x || 0);
+        floor.sprite.position.y = floor.position.y + (floor.landingRotationOffset?.y || 0);
       } else {
         // Above pivot: progressive rotation (bending effect)
         const floorsAbovePivot = this.floors.length - pivotIndex;
@@ -430,11 +440,18 @@ export class Game {
         const heightRatio = linearRatio * linearRatio * linearRatio;
 
         // Progressive rotation: each floor rotates more than the one below
-        floor.sprite.rotation.z = this.towerSwayAngle * heightRatio;
+        // Combine sway rotation with landing rotation (additive)
+        const swayRotation = this.towerSwayAngle * heightRatio;
+        const landingRotation = floor.landingRotation || 0;
+        floor.sprite.rotation.z = swayRotation + landingRotation;
 
         // Horizontal displacement (bending) using configured coefficient
+        // Combine sway bend offset with landing rotation offset (additive)
         const bendOffset = Math.sin(this.towerSwayAngle) * heightRatio * TOWER_SWAY.BEND_COEFFICIENT;
-        floor.sprite.position.x = floor.position.x + bendOffset;
+        const landingOffsetX = floor.landingRotationOffset?.x || 0;
+        const landingOffsetY = floor.landingRotationOffset?.y || 0;
+        floor.sprite.position.x = floor.position.x + bendOffset + landingOffsetX;
+        floor.sprite.position.y = floor.position.y + landingOffsetY;
       }
     });
   }
@@ -486,9 +503,23 @@ export class Game {
         floor.landingRotationStable = true;
       }
 
-      // Apply rotation to sprite
-      // Note: This rotation is independent of tower sway rotation
-      floor.sprite.rotation.z = floor.landingRotation;
+      // Calculate position offset for pivot rotation around contact point
+      // When rotating around a point other than center, the center position needs to shift
+      const contactPointX = floor.landingContactPointX;
+      const contactPointY = -floor.height / 2; // Bottom of the floor
+      const angle = floor.landingRotation;
+
+      // Calculate how much the center moves when rotating around contact point
+      // Using rotation matrix: new_pos = contact_point + R(angle) * (center - contact_point)
+      // Simplified: offset = contact_point * (1 - cos(angle)) - perpendicular * sin(angle)
+      const dx = contactPointX * (1 - Math.cos(angle)) - contactPointY * Math.sin(angle);
+      const dy = contactPointX * Math.sin(angle) + contactPointY * (1 - Math.cos(angle));
+
+      // Store the offset for later use (will be combined with sway offset)
+      floor.landingRotationOffset.x = -dx;
+      floor.landingRotationOffset.y = -dy;
+
+      // Note: Rotation and position will be applied in applySwayVisuals() to combine with sway effects
     });
   }
 

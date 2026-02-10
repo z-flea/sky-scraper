@@ -264,6 +264,108 @@
 
 ---
 
+### 2026-02-09-006 修复着陆旋转系统 - 实现接触点旋转
+
+**修改者：** AI Assistant（用户要求）
+**修改原因：**
+- [x] Bug修复 - 旋转中心错误导致效果不可见
+- [x] 视觉效果问题 - 用户期望以接触点为支点旋转，而不是围绕中心旋转
+- [x] 系统冲突 - 摆动系统和着陆旋转系统互相覆盖
+
+**问题分析：**
+
+经过深度分析，发现着陆旋转效果不可见的根本原因：
+
+1. **P0 - 旋转中心错误**（根本原因）
+   - 当前实现：楼层围绕中心点旋转
+   - 用户期望：楼层以接触点为支点旋转（类似跷跷板）
+   - 影响：用户完全看不到预期的"倾斜"效果
+
+2. **P1 - 系统冲突**（次要原因）
+   - `applySwayVisuals()` 和 `updateFloorLandingRotations()` 互相覆盖 `rotation.z` 和 `position.x`
+   - 应该改为叠加而不是覆盖
+
+3. **P2 - 参数过激**（优化问题）
+   - 刚度 30.0 和阻尼 6.0 过大，旋转衰减太快
+   - 建议降低到 `STIFFNESS: 10-15`, `DAMPING: 2-3`
+
+**修改内容：**
+
+1. **Floor 类新增属性**（`src/core/floor.js`）
+   - `landingRotationOffset: {x, y}` - 由于旋转产生的位置偏移
+   - `landingContactPointX` - 接触点X坐标（相对于中心）
+
+2. **实现接触点旋转算法**（`src/core/game.js`）
+   - 在 `releaseFloor()` 中计算接触点位置：
+     - 落在左边 → 接触点在右边（+W/2）
+     - 落在右边 → 接触点在左边（-W/2）
+   - 在 `updateFloorLandingRotations()` 中计算旋转位移：
+     ```javascript
+     dx = contactPointX * (1 - cos(angle)) - contactPointY * sin(angle)
+     dy = contactPointX * sin(angle) + contactPointY * (1 - cos(angle))
+     ```
+
+3. **修改为叠加模式**（`src/core/game.js:applySwayVisuals()`）
+   - 旋转叠加：`rotation.z = swayRotation + landingRotation`
+   - 位移叠加：`position.x = floor.position.x + bendOffset + landingOffsetX`
+   - 垂直位移：`position.y = floor.position.y + landingOffsetY`
+
+4. **参数调整**（`config/physics_params.js`）
+   - 刚度：`30.0 → 12.0`（降低60%，让旋转更持久）
+   - 阻尼：`6.0 → 3.0`（降低50%，让旋转更持久）
+
+**理论依据：**
+
+接触点旋转的数学原理：
+- 当物体围绕非中心点旋转时，中心点会产生位移
+- 使用旋转矩阵计算：`new_center = contact_point + R(angle) * (old_center - contact_point)`
+- 简化为：`offset = contact_point * (1 - cos(angle)) - perpendicular * sin(angle)`
+
+参数调整依据：
+- 降低刚度和阻尼可以让旋转持续更长时间（约1-2秒）
+- 让用户有足够时间观察到旋转效果
+- 避免旋转一闪而过
+
+**影响范围：**
+- 文件：
+  - `src/core/floor.js` - 新增属性
+  - `src/core/game.js` - 修改 `releaseFloor()`, `updateFloorLandingRotations()`, `applySwayVisuals()`
+  - `config/physics_params.js` - 调整参数
+- 系统：着陆旋转系统、塔楼摆动系统
+- 楼层范围：所有新落地的楼层
+
+**测试结果：**
+
+| 测试场景 | 修改前表现 | 修改后表现 | 评价 |
+|---------|-----------|-----------|------|
+| 楼层落在左边 | 只有平移，无旋转 | 以右边为支点逆时针旋转 | 待用户测试 |
+| 楼层落在右边 | 只有平移，无旋转 | 以左边为支点顺时针旋转 | 待用户测试 |
+| 楼层对准中心 | 无效果 | 无旋转或轻微旋转 | 待用户测试 |
+| 旋转持续时间 | 0.2-0.5秒（过快） | 1-2秒（合理） | 待用户测试 |
+
+**性能影响：**
+- FPS变化：无明显影响（预期）
+- 内存变化：无明显影响（预期）
+- 计算复杂度：增加了三角函数计算（sin, cos），但每帧只对不稳定楼层计算
+
+**相关文件：**
+- `src/core/floor.js`
+- `src/core/game.js`
+- `config/physics_params.js`
+
+**相关提交：** [待提交]
+
+**相关讨论：**
+- 深度分析报告：本次对话中的分析
+- 用户反馈：没有看到旋转，只有左右平移的效果
+
+**技术要点：**
+- 接触点旋转需要同时修改 `rotation.z` 和 `position.x/y`
+- 多个视觉系统（摆动、旋转）需要叠加而不是覆盖
+- 参数调整需要平衡视觉效果和游戏体验
+
+---
+
 ### [模板] 2026-XX-XX-XXX 参数名称
 
 **修改者：** [姓名]

@@ -145,13 +145,15 @@ export const LANDING_ROTATION = {
   // 作用：控制回正速度
   // 单位：无量纲
   // 范围：10.0 - 50.0
-  STIFFNESS: 30.0,
+  // 修改：2026-02-09 从 30.0 → 12.0（降低刚度，让旋转更持久）
+  STIFFNESS: 12.0,
 
   // PARAM: 旋转阻尼（Rotation Damping）
   // 作用：控制旋转衰减速度
   // 单位：无量纲
   // 范围：3.0 - 10.0
-  DAMPING: 6.0,
+  // 修改：2026-02-09 从 6.0 → 3.0（降低阻尼，让旋转更持久）
+  DAMPING: 3.0,
 
   // PARAM: 稳定阈值（Stability Threshold）
   // 作用：旋转角度小于此值时视为稳定
