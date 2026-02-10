@@ -194,9 +194,11 @@ export class Game {
     // Apply landing rotation (impact rotation when landing)
     // Rotation direction: left offset = counter-clockwise (negative), right offset = clockwise (positive)
     // Contact point: if floor lands on left, pivot is on right edge; if lands on right, pivot is on left edge
-    const initialRotation = offset * LANDING_ROTATION.SENSITIVITY;
-    floor.landingRotation = initialRotation;
-    floor.landingRotationVelocity = 0;
+
+    // 改变初始条件：从"大角度+零速度"改为"零角度+大速度"
+    // 楼层从水平状态开始，但有很大的旋转动量，产生"砸下"的冲击感
+    floor.landingRotation = 0;  // 水平着地（无初始倾斜）
+    floor.landingRotationVelocity = offset * LANDING_ROTATION.SENSITIVITY;  // 大的初始旋转速度
     floor.landingRotationStable = false;
 
     // Calculate contact point for pivot rotation
