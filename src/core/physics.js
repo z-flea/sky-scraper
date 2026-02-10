@@ -15,6 +15,22 @@ import {
 
 export class Physics {
   /**
+   * Calculate instability factor based on instability value
+   * Higher instability amplifies visual effects
+   *
+   * @param {number} instability - Current instability value (0-100+)
+   * @returns {number} Amplification factor (1.0 to 1.5)
+   */
+  static calculateInstabilityFactor(instability) {
+    // Normalize instability to 0-1 range (assuming max 100)
+    // 0 → 1.0 (normal)
+    // 50 → 1.25 (amplify 25%)
+    // 100+ → 1.5 (amplify 50%, conservative)
+    const normalizedInstability = Math.min(instability / 100, 1.0);
+    return 1.0 + normalizedInstability * 0.5;
+  }
+
+  /**
    * Calculate overlap between current floor and previous floor
    * Returns judgment grade and overlap width
    */
@@ -121,11 +137,13 @@ export class Physics {
    *
    * @param {number} comOffset - Center of mass offset
    * @param {number} floorCount - Number of floors
+   * @param {number} instabilityFactor - Amplification factor from instability (default 1.0)
    * @returns {number} Target angle in radians
    */
-  static calculateTargetSwayAngle(comOffset, floorCount) {
+  static calculateTargetSwayAngle(comOffset, floorCount, instabilityFactor = 1.0) {
     // Use configured sensitivity calculation
-    const sensitivity = calculateSensitivity(floorCount);
+    const baseSensitivity = calculateSensitivity(floorCount);
+    const sensitivity = baseSensitivity * instabilityFactor;  // Amplify sensitivity
     return comOffset * sensitivity;
   }
 
@@ -138,12 +156,13 @@ export class Physics {
    * @param {number} targetAngle - Target sway angle based on CoM offset
    * @param {number} deltaTime - Time step
    * @param {number} floorCount - Number of floors (affects stiffness)
+   * @param {number} instabilityFactor - Amplification factor from instability (default 1.0)
    * @returns {object} New angle and velocity
    */
-  static updateTowerSway(currentAngle, currentVelocity, targetAngle, deltaTime, floorCount) {
+  static updateTowerSway(currentAngle, currentVelocity, targetAngle, deltaTime, floorCount, instabilityFactor = 1.0) {
     // Use configured stiffness and damping
     const stiffness = calculateStiffness(floorCount);
-    const damping = TOWER_SWAY.DAMPING;
+    const damping = TOWER_SWAY.DAMPING / instabilityFactor;  // Lower damping = more persistent sway
 
     // Calculate forces
     const displacement = targetAngle - currentAngle;

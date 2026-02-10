@@ -121,10 +121,12 @@ export const VERTICAL_OSCILLATION = {
 
 export const IMPACT_FORCE = {
   // PARAM: 冲击力倍数（Impact Multiplier）
-  // 作用：楼层落地时对摆动速度的影响
-  // 单位：无量纲
-  // 范围：0.0 - 10.0
-  // 注意：此系统与重心偏移模型可能冲突，需要评估是否保留
+  // 作用：楼层落地时产生的力矩，增加塔楼的角速度
+  // 物理意义：在纯力矩模型中，这是产生振荡的核心参数
+  // 单位：(rad/s) / 单位偏移
+  // 范围：1.0 - 10.0
+  // 当前值：3.0（产生明显但不过度的振荡）
+  // 修改：2026-02-10 改为纯力矩模型，此参数是核心
   MULTIPLIER: 3.0,
 };
 
@@ -266,3 +268,38 @@ export function validateParameters() {
 if (process.env.NODE_ENV === 'development') {
   validateParameters();
 }
+
+// ============================================================================
+// Instability Effects Configuration
+// ============================================================================
+// 不稳定度视觉效果配置
+// 用于将 instability 值转化为视觉放大效果和抖动效果
+// 添加时间：2026-02-10
+// ============================================================================
+
+export const INSTABILITY_EFFECTS = {
+  // instability 影响因子的最大值（用户选择：保守1.5倍）
+  // 当 instability 达到 NORMALIZATION_BASE 时，效果放大到此倍数
+  MAX_FACTOR: 1.5,
+
+  // instability 归一化基准值（达到此值时 factor = MAX_FACTOR）
+  // 假设 instability 正常范围是 0-100
+  NORMALIZATION_BASE: 100,
+
+  // 抖动效果的 instability 阈值（用户选择：中期60）
+  // 只有当 instability 超过此值时才产生抖动效果
+  JITTER_THRESHOLD: 60,
+
+  // 抖动更新间隔（秒）
+  // 每隔此时间更新一次抖动偏移，避免过于频繁导致闪烁
+  JITTER_UPDATE_INTERVAL: 0.1,
+
+  // 抖动强度系数
+  JITTER_POSITION_X: 0.04,  // 水平位置抖动幅度
+  JITTER_POSITION_Y: 0.02,  // 垂直位置抖动幅度
+  JITTER_ROTATION: 0.02,    // 旋转角度抖动幅度（弧度）
+
+  // 计算窗口大小（用户选择：顶部5层）
+  // 使用顶部N层楼的平均 instability 来计算影响因子
+  CALCULATION_WINDOW_SIZE: 5,
+};

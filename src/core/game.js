@@ -34,6 +34,10 @@ export class Game {
     this.towerSwayAngle = 0;
     this.towerSwayVelocity = 0;
 
+    // Instability jitter state (high instability visual effect)
+    this.jitterTime = 0;  // Timer for jitter updates
+    this.jitterOffset = { x: 0, y: 0, rotation: 0 };  // Current jitter offset
+
     // Game systems
     this.crane = new Crane();
     this.sceneManager = new SceneManager(canvas);
@@ -197,8 +201,13 @@ export class Game {
 
     // 改变初始条件：从"大角度+零速度"改为"零角度+大速度"
     // 楼层从水平状态开始，但有很大的旋转动量，产生"砸下"的冲击感
+
+    // Calculate instability factor for landing rotation amplification
+    const prevInstability = prevFloor ? (prevFloor.instability || 0) : 0;
+    const instabilityFactor = Physics.calculateInstabilityFactor(prevInstability);
+
     floor.landingRotation = 0;  // 水平着地（无初始倾斜）
-    floor.landingRotationVelocity = offset * LANDING_ROTATION.SENSITIVITY;  // 大的初始旋转速度
+    floor.landingRotationVelocity = offset * LANDING_ROTATION.SENSITIVITY * instabilityFactor;  // 放大旋转速度
     floor.landingRotationStable = false;
 
     // Calculate contact point for pivot rotation
@@ -455,6 +464,13 @@ export class Game {
         floor.sprite.position.x = floor.position.x + bendOffset + landingOffsetX;
         floor.sprite.position.y = floor.position.y + landingOffsetY;
       }
+
+      // Apply instability jitter effect (only to top 5 floors, user preference)
+      if (index >= this.floors.length - 5) {
+        floor.sprite.position.x += this.jitterOffset.x;
+        floor.sprite.position.y += this.jitterOffset.y;
+        floor.sprite.rotation.z += this.jitterOffset.rotation;
+      }
     });
   }
 
@@ -526,6 +542,36 @@ export class Game {
   }
 
   /**
+   * Update instability jitter effect (high instability visual feedback)
+   * Creates random trembling when instability is high
+   */
+  updateInstabilityJitter(deltaTime) {
+    this.jitterTime += deltaTime;
+
+    // Update jitter every 0.1 seconds
+    if (this.jitterTime >= 0.1) {
+      this.jitterTime = 0;
+
+      // Calculate average instability from top 5 floors (user preference)
+      const topFloors = this.floors.slice(-5);
+      const avgInstability = topFloors.reduce((sum, f) => sum + (f.instability || 0), 0) / topFloors.length;
+
+      // Only apply jitter when instability > 60 (user preference)
+      if (avgInstability > 60) {
+        const jitterIntensity = (avgInstability - 60) / 40;  // 0.0 to 1.0
+
+        this.jitterOffset.x = (Math.random() - 0.5) * 0.04 * jitterIntensity;
+        this.jitterOffset.y = (Math.random() - 0.5) * 0.02 * jitterIntensity;
+        this.jitterOffset.rotation = (Math.random() - 0.5) * 0.02 * jitterIntensity;
+      } else {
+        this.jitterOffset.x = 0;
+        this.jitterOffset.y = 0;
+        this.jitterOffset.rotation = 0;
+      }
+    }
+  }
+
+  /**
    * Main game loop
    */
   gameLoop() {
@@ -554,13 +600,18 @@ export class Game {
       return;
     }
 
-    // Update tower sway based on center of mass (player placement accuracy)
+    // Update tower sway using pure torque model (spring steel rod effect)
+    // Tower oscillates around vertical position (0°), not center of mass
     if (this.floors.length > 0) {
-      // Calculate center of mass offset
-      const comOffset = Physics.calculateTowerCenterOfMassOffset(this.floors);
+      // Calculate instability factor from top 5 floors (user preference)
+      const topFloors = this.floors.slice(-5);
+      const avgInstability = topFloors.reduce((sum, f) => sum + (f.instability || 0), 0) / topFloors.length;
+      const instabilityFactor = Physics.calculateInstabilityFactor(avgInstability);
 
-      // Calculate target angle based on CoM offset
-      const targetAngle = Physics.calculateTargetSwayAngle(comOffset, this.floors.length);
+      // Pure torque model: target angle is always 0 (vertical position)
+      // Tower behaves like a spring steel rod planted in the ground
+      // Floor landing creates torque → tower bends → elastic force pulls back → oscillation
+      const targetAngle = 0;  // Always return to vertical, not center of mass
 
       // Update sway angle using spring-damper physics (creates oscillation)
       const swayResult = Physics.updateTowerSway(
@@ -568,7 +619,8 @@ export class Game {
         this.towerSwayVelocity,
         targetAngle,
         deltaTime,
-        this.floors.length
+        this.floors.length,
+        instabilityFactor  // Amplifies sway effect based on instability
       );
       this.towerSwayAngle = swayResult.angle;
       this.towerSwayVelocity = swayResult.velocity;
@@ -581,6 +633,9 @@ export class Game {
 
       // Update landing rotation for all floors
       this.updateFloorLandingRotations(deltaTime);
+
+      // Update instability jitter effect
+      this.updateInstabilityJitter(deltaTime);
     }
 
     // Update crane position
