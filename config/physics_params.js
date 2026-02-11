@@ -11,65 +11,47 @@
  */
 
 // ============================================================================
-// 建筑摆动系统（Tower Sway System）
+// 蛇形扭动系统（Snake Wobble System）
 // ============================================================================
 
-export const TOWER_SWAY = {
-  // PARAM: 刚度系数（Stiffness）
-  // 作用：控制建筑"回正"的速度
+export const SNAKE_WOBBLE = {
+  // PARAM: 启用蛇形扭动
+  // 作用：控制是否启用蛇形扭动效果
+  // 单位：布尔值
+  ENABLED: true,
+
+  // PARAM: 波动幅度系数
+  // 作用：控制蛇形扭动的幅度
   // 单位：无量纲
-  // 范围：0.1 - 20.0
-  // 物理意义：弹簧刚度，值越大摆动越快
-  STIFFNESS_MIN: 3.0,        // 高层建筑（100+层）的最小刚度
-  STIFFNESS_MAX: 10.0,       // 低层建筑（1-20层）的最大刚度
-  STIFFNESS_TRANSITION_START: 20,   // 开始降低刚度的楼层数
-  STIFFNESS_TRANSITION_END: 100,    // 达到最小刚度的楼层数
+  // 范围：0.5 - 2.0
+  // 物理意义：累积偏差的放大系数
+  AMPLITUDE: 1.0,
 
-  // PARAM: 阻尼系数（Damping）
-  // 作用：控制摆动衰减速度
-  // 单位：无量纲
-  // 范围：0.05 - 5.0
-  // 物理意义：能量耗散速度，值越大摆动停止越快
-  DAMPING: 2.5,
+  // PARAM: 波动频率
+  // 作用：控制蛇形扭动的速度
+  // 单位：rad/s
+  // 范围：0.5 - 2.0
+  // 注意：应该远低于力矩模型的频率（避免拍频）
+  FREQUENCY: 0.8,
 
-  // PARAM: 敏感度（Sensitivity）
-  // 作用：质心偏移转换为倾斜角度的系数
-  // 单位：弧度/单位偏移
-  // 范围：0.1 - 1.0
-  // 物理意义：建筑对质心偏移的响应程度
-  // 修改：2026-02-09 固定为 0.4（用户要求）
-  SENSITIVITY_BASE: 0.4,     // 固定敏感度（所有楼层）
-  SENSITIVITY_MAX: 0.4,      // 固定敏感度（所有楼层）
-  SENSITIVITY_INCREMENT: 0.0,  // 不再随楼层增加
-
-  // PARAM: 倒塌阈值（Collapse Threshold）
-  // 作用：超过此角度建筑倒塌
+  // PARAM: 相位差
+  // 作用：控制相邻楼层之间的相位差
   // 单位：弧度
-  // 范围：0.12 - 0.26（约7° - 15°）
-  COLLAPSE_ANGLE_MAX: 0.26,  // 15° (低层建筑)
-  COLLAPSE_ANGLE_MIN: 0.12,  // 7° (高层建筑)
-  COLLAPSE_TRANSITION_START: 20,
-  COLLAPSE_TRANSITION_END: 100,
+  // 范围：0.1 - 0.3
+  // 物理意义：相位差越大，"蛇形"效果越明显
+  PHASE_DELTA: 0.2,  // 约 11.5°
 
-  // PARAM: 滑动窗口大小（Sliding Window Size）
-  // 作用：计算重心时考虑的楼层数
+  // PARAM: 累积偏差窗口大小
+  // 作用：计算累积偏差时考虑的楼层数
   // 单位：层
-  // 范围：5 - 15
-  // 性能影响：值越大计算量越大，但物理模拟更准确
-  WINDOW_SIZE: 5,
+  // 范围：5 - 20
+  WINDOW_SIZE: 10,
 
-  // PARAM: 枢轴点位置（Pivot Point）
-  // 作用：视觉弯曲效果的枢轴位置
-  // 单位：层（从顶部往下数）
-  // 范围：3 - 10
-  PIVOT_OFFSET: 5,
-
-  // PARAM: 视觉弯曲系数（Visual Bend Coefficient）
-  // 作用：放大视觉弯曲效果
-  // 单位：无量纲
-  // 范围：0.5 - 5.0
-  // 视觉影响：值越大建筑看起来越"柔软"
-  BEND_COEFFICIENT: 4.5,
+  // PARAM: 最大累积偏差
+  // 作用：限制累积偏差的最大值，避免过度扭动
+  // 单位：位置单位
+  // 范围：1.0 - 3.0
+  MAX_ACCUMULATED_OFFSET: 2.0,
 };
 
 // ============================================================================
@@ -116,21 +98,6 @@ export const VERTICAL_OSCILLATION = {
 };
 
 // ============================================================================
-// 冲击力系统（Impact Force System）
-// ============================================================================
-
-export const IMPACT_FORCE = {
-  // PARAM: 冲击力倍数（Impact Multiplier）
-  // 作用：楼层落地时产生的力矩，增加塔楼的角速度
-  // 物理意义：在纯力矩模型中，这是产生振荡的核心参数
-  // 单位：(rad/s) / 单位偏移
-  // 范围：1.0 - 10.0
-  // 当前值：3.0（产生明显但不过度的振荡）
-  // 修改：2026-02-10 改为纯力矩模型，此参数是核心
-  MULTIPLIER: 3.0,
-};
-
-// ============================================================================
 // 着陆旋转系统（Landing Rotation System）
 // ============================================================================
 
@@ -163,111 +130,6 @@ export const LANDING_ROTATION = {
   STABILITY_ANGLE_THRESHOLD: 0.001,
   STABILITY_VELOCITY_THRESHOLD: 0.01,
 };
-
-// ============================================================================
-// 辅助函数（Helper Functions）
-// ============================================================================
-
-/**
- * 计算当前楼层数对应的刚度
- * @param {number} floorCount - 楼层数
- * @returns {number} 刚度值
- */
-export function calculateStiffness(floorCount) {
-  const { STIFFNESS_MIN, STIFFNESS_MAX, STIFFNESS_TRANSITION_START, STIFFNESS_TRANSITION_END } = TOWER_SWAY;
-
-  if (floorCount <= STIFFNESS_TRANSITION_START) {
-    return STIFFNESS_MAX;
-  }
-  if (floorCount >= STIFFNESS_TRANSITION_END) {
-    return STIFFNESS_MIN;
-  }
-
-  // 线性插值
-  const progress = (floorCount - STIFFNESS_TRANSITION_START) /
-                   (STIFFNESS_TRANSITION_END - STIFFNESS_TRANSITION_START);
-  return STIFFNESS_MAX - (STIFFNESS_MAX - STIFFNESS_MIN) * progress;
-}
-
-/**
- * 计算当前楼层数对应的敏感度
- * @param {number} floorCount - 楼层数
- * @returns {number} 敏感度值
- */
-export function calculateSensitivity(floorCount) {
-  const { SENSITIVITY_BASE, SENSITIVITY_MAX, SENSITIVITY_INCREMENT, STIFFNESS_TRANSITION_START } = TOWER_SWAY;
-
-  if (floorCount <= STIFFNESS_TRANSITION_START) {
-    return SENSITIVITY_BASE;
-  }
-
-  const sensitivity = SENSITIVITY_BASE + (floorCount - STIFFNESS_TRANSITION_START) * SENSITIVITY_INCREMENT;
-  return Math.min(sensitivity, SENSITIVITY_MAX);
-}
-
-/**
- * 计算当前楼层数对应的倒塌阈值
- * @param {number} floorCount - 楼层数
- * @returns {number} 倒塌角度阈值（弧度）
- */
-export function calculateCollapseThreshold(floorCount) {
-  const { COLLAPSE_ANGLE_MAX, COLLAPSE_ANGLE_MIN, COLLAPSE_TRANSITION_START, COLLAPSE_TRANSITION_END } = TOWER_SWAY;
-
-  if (floorCount <= COLLAPSE_TRANSITION_START) {
-    return COLLAPSE_ANGLE_MAX;
-  }
-  if (floorCount >= COLLAPSE_TRANSITION_END) {
-    return COLLAPSE_ANGLE_MIN;
-  }
-
-  // 线性插值
-  const progress = (floorCount - COLLAPSE_TRANSITION_START) /
-                   (COLLAPSE_TRANSITION_END - COLLAPSE_TRANSITION_START);
-  return COLLAPSE_ANGLE_MAX - (COLLAPSE_ANGLE_MAX - COLLAPSE_ANGLE_MIN) * progress;
-}
-
-// ============================================================================
-// 参数验证（Parameter Validation）
-// ============================================================================
-
-/**
- * 验证所有参数是否在合理范围内
- * 开发模式下会在控制台输出警告
- */
-export function validateParameters() {
-  const warnings = [];
-
-  // 验证刚度
-  if (TOWER_SWAY.STIFFNESS_MIN < 0.1 || TOWER_SWAY.STIFFNESS_MIN > 20.0) {
-    warnings.push(`STIFFNESS_MIN (${TOWER_SWAY.STIFFNESS_MIN}) 超出建议范围 [0.1, 20.0]`);
-  }
-  if (TOWER_SWAY.STIFFNESS_MAX < 0.1 || TOWER_SWAY.STIFFNESS_MAX > 20.0) {
-    warnings.push(`STIFFNESS_MAX (${TOWER_SWAY.STIFFNESS_MAX}) 超出建议范围 [0.1, 20.0]`);
-  }
-
-  // 验证阻尼
-  if (TOWER_SWAY.DAMPING < 0.05 || TOWER_SWAY.DAMPING > 5.0) {
-    warnings.push(`DAMPING (${TOWER_SWAY.DAMPING}) 超出建议范围 [0.05, 5.0]`);
-  }
-
-  // 验证敏感度
-  if (TOWER_SWAY.SENSITIVITY_BASE < 0.1 || TOWER_SWAY.SENSITIVITY_BASE > 1.0) {
-    warnings.push(`SENSITIVITY_BASE (${TOWER_SWAY.SENSITIVITY_BASE}) 超出建议范围 [0.1, 1.0]`);
-  }
-
-  // 输出警告
-  if (warnings.length > 0) {
-    console.warn('⚠️ 物理参数警告：');
-    warnings.forEach(w => console.warn(`  - ${w}`));
-  }
-
-  return warnings.length === 0;
-}
-
-// 开发模式下自动验证
-if (process.env.NODE_ENV === 'development') {
-  validateParameters();
-}
 
 // ============================================================================
 // Instability Effects Configuration

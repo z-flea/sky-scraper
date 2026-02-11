@@ -13,7 +13,7 @@ import { CameraController } from '../rendering/camera.js';
 import { JudgmentSystem } from '../systems/judgment.js';
 import { ComboSystem } from '../systems/combo.js';
 import { PhaseManager } from '../systems/phase.js';
-import { TOWER_SWAY, VERTICAL_OSCILLATION, IMPACT_FORCE, LANDING_ROTATION } from '../../config/physics_params.js';
+import { SNAKE_WOBBLE, VERTICAL_OSCILLATION, LANDING_ROTATION } from '../../config/physics_params.js';
 
 // 楼层显示缩放比例
 const FLOOR_DISPLAY_SCALE = 0.6;
@@ -30,9 +30,9 @@ export class Game {
     this.currentFloorId = 0;
     this.fallingFloor = null;
 
-    // Tower sway state (spring-damper physics with oscillation)
-    this.towerSwayAngle = 0;
-    this.towerSwayVelocity = 0;
+    // Snake wobble state (cumulative offset based wobble)
+    this.snakeWobbleTime = 0;
+    this.accumulatedOffset = 0;
 
     // Instability jitter state (high instability visual effect)
     this.jitterTime = 0;  // Timer for jitter updates
@@ -173,9 +173,17 @@ export class Game {
     // Get previous floor for judgment
     const prevFloor = this.floors[this.floors.length - 1];
 
-    // Calculate judgment
-    const result = Physics.calculateOverlap(floor, prevFloor);
+    // Calculate judgment using relative position
+    // Get tower top visual position (including all visual offsets)
+    const towerTopVisualX = this.getTowerTopVisualPosition();
+    const offset = Math.abs(this.crane.position.x - towerTopVisualX);
+
+    // Calculate judgment based on offset
+    const result = Physics.calculateOverlapByOffset(offset, prevFloor.width);
     const judgment = this.judgmentSystem.judge(result.grade, floor, prevFloor);
+
+    // Debug logging
+    console.log(`[Judgment] TowerTopVisual: ${towerTopVisualX.toFixed(3)}, BlockX: ${this.crane.position.x.toFixed(3)}, RelativeOffset: ${offset.toFixed(3)}, Grade: ${result.grade}`);
 
     // Update combo
     this.comboSystem.update(judgment.grade);
@@ -189,11 +197,8 @@ export class Game {
       return;
     }
 
-    // Apply impact force to tower when floor lands
-    // The offset creates an impulse that triggers oscillation
-    const offset = floor.position.x - prevFloor.position.x;
-    const impactForce = offset * IMPACT_FORCE.MULTIPLIER;
-    this.towerSwayVelocity += impactForce;
+    // Calculate offset for landing rotation (use logical position offset)
+    const logicalOffset = floor.position.x - prevFloor.position.x;
 
     // Apply landing rotation (impact rotation when landing)
     // Rotation direction: left offset = counter-clockwise (negative), right offset = clockwise (positive)
@@ -207,13 +212,13 @@ export class Game {
     const instabilityFactor = Physics.calculateInstabilityFactor(prevInstability);
 
     floor.landingRotation = 0;  // 水平着地（无初始倾斜）
-    floor.landingRotationVelocity = offset * LANDING_ROTATION.SENSITIVITY * instabilityFactor;  // 放大旋转速度
+    floor.landingRotationVelocity = logicalOffset * LANDING_ROTATION.SENSITIVITY * instabilityFactor;  // 放大旋转速度
     floor.landingRotationStable = false;
 
     // Calculate contact point for pivot rotation
-    // If offset > 0 (lands on right), contact point is on left edge (-W/2)
-    // If offset < 0 (lands on left), contact point is on right edge (+W/2)
-    floor.landingContactPointX = offset > 0 ? -floor.width / 2 : floor.width / 2;
+    // If logicalOffset > 0 (lands on right), contact point is on left edge (-W/2)
+    // If logicalOffset < 0 (lands on left), contact point is on right edge (+W/2)
+    floor.landingContactPointX = logicalOffset > 0 ? -floor.width / 2 : floor.width / 2;
 
     // Initialize rotation offset (will be calculated in updateFloorLandingRotations)
     floor.landingRotationOffset = { x: 0, y: 0 };
@@ -248,17 +253,6 @@ export class Game {
     const collapseResult = Physics.checkCollapse(this.floors);
     if (collapseResult.collapse) {
       this.handleCollapse(collapseResult.breakPoint);
-      return;
-    }
-
-    // Check for sway collapse
-    const swayCollapseResult = Physics.checkSwayCollapse(
-      this.towerSwayAngle,
-      this.floors.length
-    );
-    if (swayCollapseResult.collapse) {
-      console.log('Tower collapsed due to excessive sway!');
-      this.handleCollapse(this.floors.length - 1);
       return;
     }
 
@@ -423,49 +417,53 @@ export class Game {
   }
 
   /**
-   * Apply sway visuals using progressive rotation
-   * Creates a bending effect on the top floors
-   * Each floor rotates progressively more, simulating elastic deformation
+   * Get tower top visual position (including all visual offsets)
+   * Used for relative position judgment
+   *
+   * @returns {number} Tower top visual X position
+   */
+  getTowerTopVisualPosition() {
+    if (this.floors.length === 0) return 0;
+
+    const topFloor = this.floors[this.floors.length - 1];
+
+    // Logical position
+    let visualX = topFloor.position.x;
+
+    // Add snake wobble offset
+    visualX += topFloor.snakeWobbleOffset?.x || 0;
+
+    // Add landing rotation offset
+    visualX += topFloor.landingRotationOffset?.x || 0;
+
+    return visualX;
+  }
+
+  /**
+   * Apply sway visuals using snake wobble effect
+   * Each floor has independent phase, creating a snake-like twisting motion
    */
   applySwayVisuals() {
     if (this.floors.length === 0) return;
 
-    // Use configured pivot point offset
-    const pivotIndex = Math.max(0, this.floors.length - TOWER_SWAY.PIVOT_OFFSET);
-
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
-      if (index < pivotIndex) {
-        // Below pivot: no sway rotation, but apply landing rotation if exists
-        floor.sprite.rotation.z = floor.landingRotation || 0;
-        floor.sprite.position.x = floor.position.x + (floor.landingRotationOffset?.x || 0);
-        floor.sprite.position.y = floor.position.y + (floor.landingRotationOffset?.y || 0);
-      } else {
-        // Above pivot: progressive rotation (bending effect)
-        const floorsAbovePivot = this.floors.length - pivotIndex;
-        const linearRatio = (index - pivotIndex) / floorsAbovePivot;
+      // Base position and rotation (landing rotation)
+      const landingRotation = floor.landingRotation || 0;
+      const landingOffsetX = floor.landingRotationOffset?.x || 0;
+      const landingOffsetY = floor.landingRotationOffset?.y || 0;
 
-        // Use cubic curve for more dramatic effect
-        // This creates a smooth curve that looks more organic
-        const heightRatio = linearRatio * linearRatio * linearRatio;
+      // Snake wobble offset
+      const snakeOffsetX = floor.snakeWobbleOffset?.x || 0;
+      const snakeRotation = floor.snakeWobbleOffset?.rotation || 0;
 
-        // Progressive rotation: each floor rotates more than the one below
-        // Combine sway rotation with landing rotation (additive)
-        const swayRotation = this.towerSwayAngle * heightRatio;
-        const landingRotation = floor.landingRotation || 0;
-        floor.sprite.rotation.z = swayRotation + landingRotation;
+      // Apply combined effects
+      floor.sprite.rotation.z = landingRotation + snakeRotation;
+      floor.sprite.position.x = floor.position.x + landingOffsetX + snakeOffsetX;
+      floor.sprite.position.y = floor.position.y + landingOffsetY;
 
-        // Horizontal displacement (bending) using configured coefficient
-        // Combine sway bend offset with landing rotation offset (additive)
-        const bendOffset = Math.sin(this.towerSwayAngle) * heightRatio * TOWER_SWAY.BEND_COEFFICIENT;
-        const landingOffsetX = floor.landingRotationOffset?.x || 0;
-        const landingOffsetY = floor.landingRotationOffset?.y || 0;
-        floor.sprite.position.x = floor.position.x + bendOffset + landingOffsetX;
-        floor.sprite.position.y = floor.position.y + landingOffsetY;
-      }
-
-      // Apply instability jitter effect (only to top 5 floors, user preference)
+      // Apply instability jitter effect (only to top 5 floors)
       if (index >= this.floors.length - 5) {
         floor.sprite.position.x += this.jitterOffset.x;
         floor.sprite.position.y += this.jitterOffset.y;
@@ -600,32 +598,41 @@ export class Game {
       return;
     }
 
-    // Update tower sway using pure torque model (spring steel rod effect)
-    // Tower oscillates around vertical position (0°), not center of mass
+    // Update tower visuals and physics
     if (this.floors.length > 0) {
-      // Calculate instability factor from top 5 floors (user preference)
-      const topFloors = this.floors.slice(-5);
-      const avgInstability = topFloors.reduce((sum, f) => sum + (f.instability || 0), 0) / topFloors.length;
-      const instabilityFactor = Physics.calculateInstabilityFactor(avgInstability);
+      // Update snake wobble effect
+      if (SNAKE_WOBBLE.ENABLED) {
+        // Update snake wobble time
+        this.snakeWobbleTime += deltaTime;
 
-      // Pure torque model: target angle is always 0 (vertical position)
-      // Tower behaves like a spring steel rod planted in the ground
-      // Floor landing creates torque → tower bends → elastic force pulls back → oscillation
-      const targetAngle = 0;  // Always return to vertical, not center of mass
+        // Calculate accumulated offset
+        this.accumulatedOffset = Physics.calculateAccumulatedOffset(
+          this.floors,
+          SNAKE_WOBBLE.WINDOW_SIZE
+        );
 
-      // Update sway angle using spring-damper physics (creates oscillation)
-      const swayResult = Physics.updateTowerSway(
-        this.towerSwayAngle,
-        this.towerSwayVelocity,
-        targetAngle,
-        deltaTime,
-        this.floors.length,
-        instabilityFactor  // Amplifies sway effect based on instability
-      );
-      this.towerSwayAngle = swayResult.angle;
-      this.towerSwayVelocity = swayResult.velocity;
+        // Calculate snake wobble offset for each floor
+        this.floors.forEach((floor, index) => {
+          floor.snakeWobbleOffset = Physics.calculateSnakeWobbleOffset(
+            index,
+            this.floors.length,
+            this.accumulatedOffset,
+            this.snakeWobbleTime,
+            {
+              amplitude: SNAKE_WOBBLE.AMPLITUDE,
+              frequency: SNAKE_WOBBLE.FREQUENCY,
+              phaseDelta: SNAKE_WOBBLE.PHASE_DELTA
+            }
+          );
+        });
 
-      // Apply pivot rotation visual effect
+        // Debug logging (every 5 floors)
+        if (this.floors.length % 5 === 0 && Math.abs(this.accumulatedOffset) > 0.01) {
+          console.log(`[Snake Wobble] Floors: ${this.floors.length}, AccumulatedOffset: ${this.accumulatedOffset.toFixed(3)}, Time: ${this.snakeWobbleTime.toFixed(2)}`);
+        }
+      }
+
+      // Apply visual effects
       this.applySwayVisuals();
 
       // Update vertical oscillation for all floors

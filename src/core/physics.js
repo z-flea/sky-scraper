@@ -5,15 +5,67 @@
  */
 
 import {
-  TOWER_SWAY,
+  SNAKE_WOBBLE,
   VERTICAL_OSCILLATION,
-  LANDING_ROTATION,
-  calculateStiffness,
-  calculateSensitivity,
-  calculateCollapseThreshold
+  LANDING_ROTATION
 } from '../../config/physics_params.js';
 
 export class Physics {
+  /**
+   * Calculate accumulated offset using sliding window method
+   * Returns the average offset of recent floors
+   *
+   * @param {Array} floors - All floors in the tower
+   * @param {number} windowSize - Number of recent floors to consider (default 10)
+   * @returns {number} Average accumulated offset
+   */
+  static calculateAccumulatedOffset(floors, windowSize = 10) {
+    if (floors.length <= 1) return 0;
+
+    // Only consider recent windowSize floors
+    const recentFloors = floors.slice(-Math.min(windowSize, floors.length));
+    let totalOffset = 0;
+
+    // Sum up offsets between adjacent floors
+    for (let i = 1; i < recentFloors.length; i++) {
+      const offset = recentFloors[i].position.x - recentFloors[i-1].position.x;
+      totalOffset += offset;
+    }
+
+    // Return average offset
+    const avgOffset = totalOffset / recentFloors.length;
+
+    // Clamp to max accumulated offset
+    const maxOffset = SNAKE_WOBBLE.MAX_ACCUMULATED_OFFSET;
+    return Math.max(-maxOffset, Math.min(maxOffset, avgOffset));
+  }
+
+  /**
+   * Calculate snake wobble offset for a specific floor
+   * Each floor has independent phase, creating snake-like twisting motion
+   *
+   * @param {number} floorIndex - Floor index (0-based from bottom)
+   * @param {number} totalFloors - Total number of floors
+   * @param {number} accumulatedOffset - Accumulated offset from calculateAccumulatedOffset
+   * @param {number} time - Current time (seconds)
+   * @param {object} params - Wobble parameters {amplitude, frequency, phaseDelta}
+   * @returns {object} {x: horizontal offset, rotation: rotation angle}
+   */
+  static calculateSnakeWobbleOffset(floorIndex, totalFloors, accumulatedOffset, time, params) {
+    const { amplitude, frequency, phaseDelta } = params;
+
+    // Phase = ωt + i×δ
+    const phase = frequency * time + floorIndex * phaseDelta;
+
+    // Horizontal offset
+    const wobbleX = accumulatedOffset * amplitude * Math.sin(phase);
+
+    // Rotation angle (based on adjacent floor offset difference)
+    const wobbleRotation = accumulatedOffset * amplitude * Math.cos(phase) * phaseDelta;
+
+    return { x: wobbleX, rotation: wobbleRotation };
+  }
+
   /**
    * Calculate instability factor based on instability value
    * Higher instability amplifies visual effects
@@ -51,6 +103,23 @@ export class Physics {
     if (offset < 0.20 * W) return { grade: 'Great', overlap_width };
     if (offset < 0.50 * W) return { grade: 'Okay', overlap_width };
     return { grade: 'Miss', overlap_width: 0 };
+  }
+
+  /**
+   * Calculate overlap by offset (for relative position judgment)
+   * Returns judgment grade based on offset and base width
+   *
+   * @param {number} offset - Absolute offset between block and tower top
+   * @param {number} baseWidth - Width of the base floor
+   * @returns {object} {grade: 'Perfect'|'Great'|'Okay'|'Miss'}
+   */
+  static calculateOverlapByOffset(offset, baseWidth) {
+    const W = baseWidth;
+
+    if (offset < 0.05 * W) return { grade: 'Perfect' };
+    if (offset < 0.20 * W) return { grade: 'Great' };
+    if (offset < 0.50 * W) return { grade: 'Okay' };
+    return { grade: 'Miss' };
   }
 
   /**
@@ -101,85 +170,6 @@ export class Physics {
   }
 
   /**
-   * Calculate the center of mass offset for the tower
-   * Returns the horizontal offset from the base center
-   *
-   * @param {Array} floors - All floors in the tower
-   * @returns {number} CoM offset (positive = right, negative = left)
-   */
-  static calculateTowerCenterOfMassOffset(floors) {
-    if (floors.length === 0) return 0;
-
-    // Use configured window size for CoM calculation
-    const windowSize = TOWER_SWAY.WINDOW_SIZE;
-    const floorsToCheck = floors.length <= windowSize ? floors : floors.slice(-windowSize);
-
-    let totalMass = 0;
-    let weightedX = 0;
-
-    for (let floor of floorsToCheck) {
-      totalMass += floor.mass;
-      weightedX += floor.position.x * floor.mass;
-    }
-
-    const CoM = weightedX / totalMass;
-
-    // Calculate offset from base floor center
-    const baseFloor = floors.length <= windowSize ? floors[0] : floors[floors.length - windowSize - 1];
-    const offset = CoM - baseFloor.position.x;
-
-    return offset;
-  }
-
-  /**
-   * Calculate target sway angle based on center of mass offset
-   * The tower leans towards the direction of the center of mass
-   *
-   * @param {number} comOffset - Center of mass offset
-   * @param {number} floorCount - Number of floors
-   * @param {number} instabilityFactor - Amplification factor from instability (default 1.0)
-   * @returns {number} Target angle in radians
-   */
-  static calculateTargetSwayAngle(comOffset, floorCount, instabilityFactor = 1.0) {
-    // Use configured sensitivity calculation
-    const baseSensitivity = calculateSensitivity(floorCount);
-    const sensitivity = baseSensitivity * instabilityFactor;  // Amplify sensitivity
-    return comOffset * sensitivity;
-  }
-
-  /**
-   * Update tower sway angle using spring-damper physics
-   * Creates oscillation effect when tower is impacted
-   *
-   * @param {number} currentAngle - Current sway angle (radians)
-   * @param {number} currentVelocity - Current angular velocity (radians/s)
-   * @param {number} targetAngle - Target sway angle based on CoM offset
-   * @param {number} deltaTime - Time step
-   * @param {number} floorCount - Number of floors (affects stiffness)
-   * @param {number} instabilityFactor - Amplification factor from instability (default 1.0)
-   * @returns {object} New angle and velocity
-   */
-  static updateTowerSway(currentAngle, currentVelocity, targetAngle, deltaTime, floorCount, instabilityFactor = 1.0) {
-    // Use configured stiffness and damping
-    const stiffness = calculateStiffness(floorCount);
-    const damping = TOWER_SWAY.DAMPING / instabilityFactor;  // Lower damping = more persistent sway
-
-    // Calculate forces
-    const displacement = targetAngle - currentAngle;
-    const springForce = displacement * stiffness;
-    const dampingForce = -currentVelocity * damping;
-
-    // Total acceleration
-    const acceleration = springForce + dampingForce;
-
-    // Update velocity and angle using semi-implicit Euler integration
-    const newVelocity = currentVelocity + acceleration * deltaTime;
-    const newAngle = currentAngle + newVelocity * deltaTime;
-
-    return { angle: newAngle, velocity: newVelocity };
-  }
-
-  /**
    * Update floor vertical oscillation (bounce effect)
    * Uses spring-damper physics for realistic bounce
    *
@@ -211,24 +201,6 @@ export class Physics {
     }
 
     return { offset: newOffset, velocity: newVelocity, isStable: false };
-  }
-
-  /**
-   * Check if sway angle causes collapse
-   *
-   * @param {number} swayAngle - Current sway angle (radians)
-   * @param {number} floorCount - Number of floors
-   * @returns {object} Collapse result
-   */
-  static checkSwayCollapse(swayAngle, floorCount) {
-    // Use configured collapse threshold calculation
-    const maxAngle = calculateCollapseThreshold(floorCount);
-
-    if (Math.abs(swayAngle) > maxAngle) {
-      return { collapse: true, reason: 'sway' };
-    }
-
-    return { collapse: false };
   }
 
   /**

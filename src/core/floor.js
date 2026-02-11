@@ -28,6 +28,9 @@ export class Floor {
     this.landingRotationStable = true; // Whether rotation has stabilized
     this.landingRotationOffset = { x: 0, y: 0 }; // Position offset due to rotation around contact point
     this.landingContactPointX = 0; // Contact point X relative to center (for pivot rotation)
+
+    // Snake wobble state (for cumulative offset based wobble)
+    this.snakeWobbleOffset = { x: 0, rotation: 0 }; // Snake wobble offset
   }
 
   /**
