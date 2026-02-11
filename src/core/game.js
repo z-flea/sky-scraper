@@ -29,6 +29,8 @@ export class Game {
     this.score = 0;
     this.currentFloorId = 0;
     this.fallingFloor = null;
+    this.hp = 3;  // 生命值系统
+    this.maxHp = 3;
 
     // Snake wobble state (cumulative offset based wobble)
     this.snakeWobbleTime = 0;
@@ -249,12 +251,12 @@ export class Game {
     // Add floor to tower
     this.floors.push(floor);
 
-    // Check for collapse
-    const collapseResult = Physics.checkCollapse(this.floors);
-    if (collapseResult.collapse) {
-      this.handleCollapse(collapseResult.breakPoint);
-      return;
-    }
+    // 质心倒塌机制已移除 - 只保留单次偏移判定
+    // const collapseResult = Physics.checkCollapse(this.floors);
+    // if (collapseResult.collapse) {
+    //   this.handleCollapse(collapseResult.breakPoint);
+    //   return;
+    // }
 
     // Prepare next floor
     this.currentFloorId++;
@@ -293,12 +295,12 @@ export class Game {
   }
 
   /**
-   * Handle tower collapse
+   * Handle tower collapse (已废弃 - 移除质心倒塌机制)
    */
-  handleCollapse(breakPoint) {
-    console.log('Tower collapsed at floor', breakPoint);
-    this.gameOver();
-  }
+  // handleCollapse(breakPoint) {
+  //   console.log('Tower collapsed at floor', breakPoint);
+  //   this.gameOver();
+  // }
 
   /**
    * Game over
@@ -345,6 +347,7 @@ export class Game {
     this.currentFloorId = 0;
     this.isRunning = true;
     this.isPaused = false;
+    this.hp = this.maxHp;  // 重置 HP
 
     // Reset tower sway
     this.towerSwayAngle = 0;
@@ -375,6 +378,12 @@ export class Game {
   updateUI() {
     document.getElementById('score-display').textContent = `Score: ${this.score}`;
     document.getElementById('floor-count').textContent = `Floor: ${this.floors.length}`;
+
+    // 更新 HP 显示
+    const hpDisplay = document.getElementById('hp-display');
+    if (hpDisplay) {
+      hpDisplay.textContent = `HP: ${this.hp}`;
+    }
   }
 
   /**
@@ -449,6 +458,14 @@ export class Game {
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
+      // 新手保护：前5层（index 0-4）不应用任何晃动和偏移效果
+      if (index < 5) {
+        floor.sprite.rotation.z = 0;
+        floor.sprite.position.x = floor.position.x;
+        floor.sprite.position.y = floor.position.y;
+        return;
+      }
+
       // Base position and rotation (landing rotation)
       const landingRotation = floor.landingRotation || 0;
       const landingOffsetX = floor.landingRotationOffset?.x || 0;
@@ -477,8 +494,16 @@ export class Game {
    * Creates bounce effect when floors land
    */
   updateFloorOscillations(deltaTime) {
-    this.floors.forEach((floor) => {
+    this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
+
+      // 新手保护：前5层（index 0-4）不产生垂直振荡
+      if (index < 5) {
+        floor.verticalOffset = 0;
+        floor.verticalVelocity = 0;
+        floor.isStable = true;
+        return;
+      }
 
       // Skip if floor is already stable and has no oscillation
       if (floor.isStable && Math.abs(floor.verticalOffset) < 0.001) return;
@@ -503,8 +528,17 @@ export class Game {
    * Creates impact rotation effect when floors land
    */
   updateFloorLandingRotations(deltaTime) {
-    this.floors.forEach((floor) => {
+    this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
+
+      // 新手保护：前5层（index 0-4）不产生着陆旋转
+      if (index < 5) {
+        floor.landingRotation = 0;
+        floor.landingRotationVelocity = 0;
+        floor.landingRotationStable = true;
+        floor.landingRotationOffset = { x: 0, y: 0 };
+        return;
+      }
 
       // Skip if floor rotation is already stable
       if (floor.landingRotationStable) return;
@@ -613,6 +647,12 @@ export class Game {
 
         // Calculate snake wobble offset for each floor
         this.floors.forEach((floor, index) => {
+          // 新手保护：前5层（index 0-4）不产生蛇形扭动
+          if (index < 5) {
+            floor.snakeWobbleOffset = { x: 0, rotation: 0 };
+            return;
+          }
+
           floor.snakeWobbleOffset = Physics.calculateSnakeWobbleOffset(
             index,
             this.floors.length,
@@ -693,9 +733,19 @@ export class Game {
         this.sceneManager.scene.remove(falling.floor.sprite);
       }
 
-      // Game over
       this.fallingFloor = null;
-      this.gameOver();
+
+      // 扣除 1 HP
+      this.hp--;
+      this.updateUI();
+
+      // 检查是否 Game Over
+      if (this.hp <= 0) {
+        this.gameOver();
+      } else {
+        // HP > 0，继续游戏
+        this.prepareNextFloor();
+      }
     }
   }
 
