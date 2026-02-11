@@ -17,7 +17,7 @@ export class Physics {
    *
    * @param {Array} floors - All floors in the tower
    * @param {number} windowSize - Number of recent floors to consider (default 10)
-   * @returns {number} Average accumulated offset
+   * @returns {number} Cumulative accumulated offset
    */
   static calculateAccumulatedOffset(floors, windowSize = 10) {
     if (floors.length <= 1) return 0;
@@ -32,12 +32,12 @@ export class Physics {
       totalOffset += offset;
     }
 
-    // Return average offset
-    const avgOffset = totalOffset / recentFloors.length;
+    // Return cumulative offset (not divided by floor count)
+    const cumulativeOffset = totalOffset;
 
     // Clamp to max accumulated offset
     const maxOffset = SNAKE_WOBBLE.MAX_ACCUMULATED_OFFSET;
-    return Math.max(-maxOffset, Math.min(maxOffset, avgOffset));
+    return Math.max(-maxOffset, Math.min(maxOffset, cumulativeOffset));
   }
 
   /**
