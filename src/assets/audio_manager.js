@@ -9,6 +9,7 @@ export class AudioManager {
     this.sounds = new Map();
     this.bgm = null;
     this.isMuted = false;
+    this.bgmVolume = 0.3; // 默认音量 30%
   }
 
   /**
@@ -49,7 +50,8 @@ export class AudioManager {
     }
 
     this.bgm = new Audio(path);
-    this.bgm.volume = volume;
+    this.bgmVolume = volume;
+    this.bgm.volume = this.bgmVolume;
     this.bgm.loop = true;
     this.bgm.play().catch(e => console.error('Error playing BGM:', e));
   }
@@ -72,5 +74,22 @@ export class AudioManager {
     if (this.bgm) {
       this.bgm.muted = this.isMuted;
     }
+  }
+
+  /**
+   * Set BGM volume
+   */
+  setBGMVolume(volume) {
+    this.bgmVolume = Math.max(0, Math.min(1, volume));
+    if (this.bgm) {
+      this.bgm.volume = this.bgmVolume;
+    }
+  }
+
+  /**
+   * Get current BGM volume
+   */
+  getBGMVolume() {
+    return this.bgmVolume;
   }
 }

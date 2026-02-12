@@ -38,17 +38,30 @@ export class PhaseManager {
    * Get difficulty parameters for current phase
    */
   getDifficultyParams(phaseId) {
-    const baseAmplitude = 3.0;
-    const baseAngularVelocity = 2.0;
-    const baseNoise = 0.2;
+    // 方案 B：平衡难度
+    // - 振幅保持不变（2.5）
+    // - 速度适度提升（每阶段 +0.5）
+    const amplitude = 2.5;
+    const baseAngularVelocity = 2.5;
+    const angularVelocityIncrement = 0.5;
 
-    // Increase difficulty with phase
-    const multiplier = 1 + (phaseId - 1) * 0.2;
+    // 角速度线性增长：2.5, 3.0, 3.5, 4.0, 4.5
+    const angularVelocity = baseAngularVelocity + (phaseId - 1) * angularVelocityIncrement;
+
+    // 噪声随角速度同步增长
+    const noiseRange = 0.2 * (angularVelocity / baseAngularVelocity);
+
+    // 楼层晃动基础参数（随阶段递增）
+    // Phase 1: 1.0, Phase 2: 1.1, Phase 3: 1.2, Phase 4: 1.3, Phase 5: 1.5
+    const wobbleAmplitude = phaseId <= 4 ? 1.0 + (phaseId - 1) * 0.1 : 1.5;
+    const wobbleFrequency = phaseId <= 4 ? 1.0 + (phaseId - 1) * 0.1 : 1.5;
 
     return {
-      amplitude: baseAmplitude * multiplier,
-      angularVelocity: baseAngularVelocity * multiplier,
-      noiseRange: baseNoise * multiplier
+      amplitude: amplitude,
+      angularVelocity: angularVelocity,
+      noiseRange: noiseRange,
+      wobbleAmplitude: wobbleAmplitude,
+      wobbleFrequency: wobbleFrequency
     };
   }
 }

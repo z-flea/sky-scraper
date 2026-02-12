@@ -55,6 +55,17 @@
       pointer-events: none;
     }
 
+    #hp-display {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: #ff0000;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+
     #game-over-overlay {
       position: absolute;
       top: 0;
@@ -107,6 +118,155 @@
     #restart-button:hover {
       background: #357ABD;
     }
+
+    #settings-button {
+      position: absolute;
+      top: 20px;
+      right: 80px;
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s;
+      pointer-events: all;
+      backdrop-filter: blur(5px);
+    }
+
+    #settings-button:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    #settings-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      pointer-events: all;
+    }
+
+    #settings-overlay.show {
+      display: flex;
+    }
+
+    #settings-panel {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    #settings-title {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .settings-section {
+      margin-bottom: 25px;
+    }
+
+    .settings-section h3 {
+      font-size: 20px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .volume-control {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .volume-control input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+    }
+
+    .volume-control input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #4A90E2;
+      cursor: pointer;
+    }
+
+    .volume-control span {
+      min-width: 40px;
+      text-align: right;
+      color: #666;
+      font-size: 16px;
+    }
+
+    #history-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .history-item {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-item-date {
+      color: #999;
+      font-size: 14px;
+    }
+
+    .history-item-stats {
+      color: #333;
+      font-size: 16px;
+    }
+
+    .no-history {
+      text-align: center;
+      color: #999;
+      padding: 20px;
+    }
+
+    #close-settings-button {
+      background: #4A90E2;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+      display: block;
+      margin: 20px auto 0;
+    }
+
+    #close-settings-button:hover {
+      background: #357ABD;
+    }
   </style>
 </head>
 <body>
@@ -115,6 +275,8 @@
   <div id="ui-overlay">
     <div id="score-display">Score: 0</div>
     <div id="floor-count">Floor: 0</div>
+    <div id="hp-display">HP: 3</div>
+    <button id="settings-button">设置</button>
   </div>
 
   <div id="game-over-overlay">
@@ -125,6 +287,29 @@
         <div>建造楼层: <span id="final-floors">0</span></div>
       </div>
       <button id="restart-button">重新开始</button>
+    </div>
+  </div>
+
+  <div id="settings-overlay">
+    <div id="settings-panel">
+      <div id="settings-title">设置</div>
+
+      <div class="settings-section">
+        <h3>背景音乐音量</h3>
+        <div class="volume-control">
+          <input type="range" id="bgm-volume-slider" min="0" max="100" value="30">
+          <span id="bgm-volume-value">30%</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h3>历史游玩记录</h3>
+        <div id="history-list">
+          <div class="no-history">暂无游玩记录</div>
+        </div>
+      </div>
+
+      <button id="close-settings-button">关闭</button>
     </div>
   </div>
 

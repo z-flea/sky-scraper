@@ -11,6 +11,9 @@ export class CameraController {
     this.smoothing = 0.1; // Camera smoothing factor
     this.shakeOffset = { x: 0, y: 0 };
     this.shakeTime = 0;
+    this.shakeIntensity = 0;
+    this.shakeDuration = 0;
+    this.shakeElapsed = 0;
   }
 
   /**
@@ -22,19 +25,51 @@ export class CameraController {
     // Get the top floor
     const topFloor = floors[floors.length - 1];
 
-    // Set target Y position to center on top floors
-    this.targetY = topFloor.position.y;
+    // 当楼层数量较少时（<= 3 层），相机保持在初始位置 y=0
+    // 这样地基会保持在画面底部，不会"弹回"中间
+    if (floors.length <= 3) {
+      this.targetY = 0;
+    } else {
+      // 楼层较多时，相机跟随顶层楼层
+      this.targetY = topFloor.position.y;
+    }
 
     // Smooth camera movement
     const currentY = this.camera.position.y;
     const newY = currentY + (this.targetY - currentY) * this.smoothing;
 
-    // Disable camera shake - only the building should sway, not the camera
-    // this.calculateShake(floors);
+    // 更新震动
+    this.updateShake(0.016);  // 假设 60 FPS
 
-    // Apply position without shake (camera stays stable)
-    this.camera.position.x = 0;
-    this.camera.position.y = newY;
+    // 应用震动
+    this.camera.position.x = 0 + this.shakeOffset.x;
+    this.camera.position.y = newY + this.shakeOffset.y;
+  }
+
+  /**
+   * 触发相机震动
+   */
+  triggerShake(intensity, duration) {
+    this.shakeIntensity = intensity;
+    this.shakeDuration = duration;
+    this.shakeElapsed = 0;
+  }
+
+  /**
+   * 更新震动效果
+   */
+  updateShake(deltaTime) {
+    if (this.shakeElapsed >= this.shakeDuration) {
+      this.shakeOffset = { x: 0, y: 0 };
+      return;
+    }
+
+    this.shakeElapsed += deltaTime;
+    const progress = this.shakeElapsed / this.shakeDuration;
+    const currentIntensity = this.shakeIntensity * (1 - progress);
+
+    this.shakeOffset.x = (Math.random() - 0.5) * currentIntensity;
+    this.shakeOffset.y = (Math.random() - 0.5) * currentIntensity;
   }
 
   /**

@@ -6,6 +6,9 @@
 
 import * as THREE from 'three';
 
+// 楼层显示缩放比例
+const FLOOR_DISPLAY_SCALE = 0.6;
+
 export class SceneManager {
   constructor(canvas) {
     this.canvas = canvas;
@@ -46,9 +49,14 @@ export class SceneManager {
     this.floorSprites = [];
 
     // Crane visualization objects
-    this.craneArm = null;
     this.craneCable = null;
     this.craneHook = null;
+
+    // Texture loader
+    this.textureLoader = new THREE.TextureLoader();
+    this.floorTextures = []; // 存储四种楼层纹理
+    this.isTextureLoaded = false;
+    this.texturesLoadedCount = 0;
 
     // Initialize crane visualization
     this.createCrane();
@@ -67,86 +75,196 @@ export class SceneManager {
   }
 
   /**
+   * Load floor textures (all 6 types)
+   */
+  loadFloorTexture(onComplete) {
+    const textureFiles = [
+      '/assets/sprites/dom/domlevel.png',
+      '/assets/sprites/dom/domlevel2.png',
+      '/assets/sprites/dom/domlevel3.png',
+      '/assets/sprites/dom/domlevel4.png',
+      '/assets/sprites/dom/domlevel5.png',
+      '/assets/sprites/dom/domlevel6.png'
+    ];
+
+    const totalTextures = textureFiles.length;
+
+    textureFiles.forEach((file, index) => {
+      this.textureLoader.load(
+        file,
+        (texture) => {
+          console.log(`楼层纹理 ${index + 1} 加载成功`);
+
+          // 禁用预乘 alpha，避免边缘颜色错误
+          texture.premultipliedAlpha = false;
+
+          // 使用最近邻过滤，避免透明边缘插值产生半透明像素
+          texture.minFilter = THREE.NearestFilter;
+          texture.magFilter = THREE.NearestFilter;
+
+          // 裁剪纹理，只显示中心有内容的部分
+          const contentRatio = 0.44;
+          texture.repeat.set(contentRatio, contentRatio);
+          texture.offset.set((1 - contentRatio) / 2, (1 - contentRatio) / 2);
+
+          this.floorTextures[index] = texture;
+          this.texturesLoadedCount++;
+
+          // 所有纹理加载完成后调用回调
+          if (this.texturesLoadedCount === totalTextures) {
+            this.isTextureLoaded = true;
+            if (onComplete) onComplete();
+          }
+        },
+        undefined,
+        (error) => {
+          console.error(`楼层纹理 ${index + 1} 加载失败:`, error);
+          this.texturesLoadedCount++;
+
+          // 即使加载失败也继续
+          if (this.texturesLoadedCount === totalTextures) {
+            this.isTextureLoaded = true;
+            if (onComplete) onComplete();
+          }
+        }
+      );
+    });
+  }
+
+  /**
    * Create crane visualization
    */
   createCrane() {
-    // Create crane arm (horizontal beam)
-    const armGeometry = new THREE.PlaneGeometry(0.3, 8);
-    const armMaterial = new THREE.MeshBasicMaterial({
-      color: 0x333333,
-      side: THREE.DoubleSide
+    // Create cable using a thin plane with texture
+    // 宽度设为 1.0，让纹理有足够空间显示，透明部分会被 alphaTest 自动过滤
+    const cableGeometry = new THREE.PlaneGeometry(1.0, 5);
+    const cableMaterial = new THREE.MeshBasicMaterial({
+      transparent: true, // 必须为 true 才能正确读取 alpha 通道
+      side: THREE.DoubleSide,
+      alphaTest: 0.9, // 提高到 0.9，只保留几乎完全不透明的像素
+      depthWrite: true // 启用深度写入
     });
-    this.craneArm = new THREE.Mesh(armGeometry, armMaterial);
-    this.craneArm.rotation.z = Math.PI / 2; // Rotate to horizontal
-    this.scene.add(this.craneArm);
-
-    // Create cable (vertical line)
-    const cableMaterial = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2 });
-    const cableGeometry = new THREE.BufferGeometry();
-    const cablePositions = new Float32Array([
-      0, 0, 0,  // Start point
-      0, -5, 0  // End point
-    ]);
-    cableGeometry.setAttribute('position', new THREE.BufferAttribute(cablePositions, 3));
-    this.craneCable = new THREE.Line(cableGeometry, cableMaterial);
+    this.craneCable = new THREE.Mesh(cableGeometry, cableMaterial);
+    this.craneCable.visible = false; // 初始隐藏，等纹理加载完成
     this.scene.add(this.craneCable);
 
-    // Create hook (small box)
-    const hookGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-    const hookMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
-    this.craneHook = new THREE.Mesh(hookGeometry, hookMaterial);
-    this.scene.add(this.craneHook);
+    // Load cable texture with callback
+    this.textureLoader.load(
+      '/assets/sprites/dom/cable.png',
+      (texture) => {
+        console.log('吊线纹理加载成功');
+
+        // 禁用预乘 alpha，避免边缘颜色错误
+        texture.premultipliedAlpha = false;
+
+        // 使用最近邻过滤，避免透明边缘插值产生半透明像素
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+
+        cableMaterial.map = texture;
+        cableMaterial.needsUpdate = true;
+        this.craneCable.visible = true; // 纹理加载完成后显示
+      },
+      undefined,
+      (error) => {
+        console.error('吊线纹理加载失败:', error);
+        // 加载失败时使用纯色作为后备
+        cableMaterial.color.set(0x333333);
+        this.craneCable.visible = true;
+      }
+    );
+
+    // Hook removed - no longer needed
   }
 
   /**
    * Update crane position
    */
   updateCrane(craneX, craneY, floorY) {
-    if (!this.craneArm || !this.craneCable || !this.craneHook) return;
+    if (!this.craneCable) return;
 
-    // Update arm position (fixed Y, follows crane X)
-    this.craneArm.position.set(craneX, craneY + 1, 0.1);
+    // 调试日志
+    console.log('[updateCrane] craneX:', craneX, 'craneY:', craneY, 'floorY:', floorY);
 
-    // Update cable position and length
-    const cableLength = craneY - floorY;
-    const cablePositions = this.craneCable.geometry.attributes.position.array;
-    cablePositions[0] = craneX;
-    cablePositions[1] = craneY;
-    cablePositions[2] = 0.1;
-    cablePositions[3] = craneX;
-    cablePositions[4] = floorY;
-    cablePositions[5] = 0.1;
-    this.craneCable.geometry.attributes.position.needsUpdate = true;
+    // 楼层显示高度 = 4.0 * 0.6 = 2.4
+    const floorDisplayHeight = 2.4;
 
-    // Update hook position
-    this.craneHook.position.set(craneX, floorY - 0.3, 0.1);
+    // 钩子位置：紧贴楼层顶部
+    // 楼层顶部 = floorY + floorDisplayHeight / 2
+    const floorTop = floorY + floorDisplayHeight / 2;
+    // Hook removed - position update no longer needed
+    // const hookY = floorTop;
+    // this.craneHook.position.set(craneX, hookY, 0.1);
+
+    // 吊线终点：楼层顶部（原本是钩子顶部）
+    const cableEndY = floorTop;
+    // 吊线起点：相机视野顶部（让吊线从画面顶部延伸下来）
+    const viewSize = 20;
+    const cameraTopY = this.camera.position.y + viewSize / 2;
+    const cableStartY = cameraTopY;
+    // 吊线长度
+    const cableLength = cableStartY - cableEndY;
+    // 吊线中心点
+    const cableCenterY = (cableStartY + cableEndY) / 2;
+
+    console.log('[updateCrane] cableEndY:', cableEndY, 'cameraTopY:', cameraTopY, 'cableLength:', cableLength, 'scale.y:', cableLength / 5);
+
+    // Update cable position (center of the cable)
+    this.craneCable.position.set(craneX, cableCenterY, 0.1);
+
+    // Update cable scale to match the distance
+    this.craneCable.scale.y = cableLength / 5;
+  }
+
+  /**
+   * Get texture index based on floor number
+   */
+  getTextureIndexByFloorNumber(floorId) {
+    if (floorId <= 10) return 0;
+    if (floorId <= 30) return 1;
+    if (floorId <= 50) return 2;
+    if (floorId <= 80) return 3;
+    if (floorId <= 120) return 4;
+    return 5;
   }
 
   /**
    * Add a floor to the scene
    */
   addFloor(floor) {
-    // Create a simple colored rectangle as placeholder
-    const geometry = new THREE.PlaneGeometry(floor.width, floor.height);
-    const material = new THREE.MeshBasicMaterial({
-      color: this.getFloorColor(floor.phase),
-      side: THREE.DoubleSide
+    // 地基（第一个楼层）不使用纹理，使用纯色
+    // 根据楼层数量选择对应的纹理
+    let floorTexture = null;
+    let textureIndex = -1;
+    
+    if (floor.id !== 0 && this.floorTextures.length > 0) {
+      textureIndex = this.getTextureIndexByFloorNumber(floor.id);
+      floorTexture = this.floorTextures[textureIndex];
+      
+      // 添加调试日志
+      console.log(`[楼层纹理] 楼层 ID: ${floor.id}, 纹理索引: ${textureIndex}, 纹理文件: domlevel${textureIndex === 0 ? "" : textureIndex + 1}.png, 纹理已加载: ${!!floorTexture}`);
+    } else if (floor.id === 0) {
+      console.log(`[楼层纹理] 楼层 ID: ${floor.id} (地基), 使用纯色，不使用纹理`);
+    } else {
+      console.log(`[楼层纹理] 楼层 ID: ${floor.id}, 纹理未加载，使用纯色`);
+    }
+
+    const material = new THREE.SpriteMaterial({
+      map: floorTexture,
+      color: floorTexture ? 0xffffff : this.getFloorColor(floor.phase),
+      transparent: true,
+      alphaTest: 0.9 // 提高到 0.9，只保留几乎完全不透明的像素
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(floor.position.x, floor.position.y, 0);
+    const sprite = new THREE.Sprite(material);
 
-    // Add outline
-    const edges = new THREE.EdgesGeometry(geometry);
-    const line = new THREE.LineSegments(
-      edges,
-      new THREE.LineBasicMaterial({ color: 0x000000 })
-    );
-    mesh.add(line);
+    // 设置 sprite 的缩放以匹配楼层尺寸
+    sprite.scale.set(floor.width * FLOOR_DISPLAY_SCALE, floor.height * FLOOR_DISPLAY_SCALE, 1);
+    sprite.position.set(floor.position.x, floor.position.y, 0);
 
-    this.scene.add(mesh);
-    floor.sprite = mesh;
-    this.floorSprites.push(mesh);
+    this.scene.add(sprite);
+    floor.sprite = sprite;
+    this.floorSprites.push(sprite);
   }
 
   /**

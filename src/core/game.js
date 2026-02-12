@@ -383,10 +383,19 @@ export class Game {
     this.isPaused = false;
     this.hp = this.maxHp;  // 重置 HP
     this.bgmStarted = false;
+    this.fallingFloor = null;  // 重置掉落楼层
 
     // Reset tower sway
     this.towerSwayAngle = 0;
     this.towerSwayVelocity = 0;
+
+    // Reset snake wobble state
+    this.snakeWobbleTime = 0;
+    this.accumulatedOffset = 0;
+
+    // Reset instability jitter state
+    this.jitterTime = 0;
+    this.jitterOffset = { x: 0, y: 0, rotation: 0 };
 
     // Clear scene
     this.sceneManager.floorSprites.forEach(sprite => {
@@ -405,6 +414,10 @@ export class Game {
 
     // Update UI
     this.updateUI();
+
+    // Restart game loop
+    this.lastTime = performance.now();
+    this.gameLoop();
   }
 
   /**
