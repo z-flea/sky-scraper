@@ -13,6 +13,8 @@ import { CameraController } from '../rendering/camera.js';
 import { JudgmentSystem } from '../systems/judgment.js';
 import { ComboSystem } from '../systems/combo.js';
 import { PhaseManager } from '../systems/phase.js';
+import { AudioManager } from '../assets/audio_manager.js';
+import { SettingsManager } from '../ui/settings.js';
 import { SNAKE_WOBBLE, VERTICAL_OSCILLATION, LANDING_ROTATION } from '../../config/physics_params.js';
 
 // 楼层显示缩放比例
@@ -47,6 +49,9 @@ export class Game {
     this.judgmentSystem = new JudgmentSystem();
     this.comboSystem = new ComboSystem();
     this.phaseManager = new PhaseManager();
+    this.audioManager = new AudioManager();
+    this.settingsManager = new SettingsManager(this.audioManager);
+    this.bgmStarted = false;
 
     // Timing
     this.lastTime = 0;
@@ -149,6 +154,11 @@ export class Game {
   prepareNextFloor() {
     const prevFloor = this.floors[this.floors.length - 1];
     const phase = this.phaseManager.getCurrentPhase(this.floors.length);
+
+    // Update crane difficulty based on current phase
+    const difficultyParams = this.phaseManager.getDifficultyParams(phase);
+    this.crane.updateDifficulty(difficultyParams);
+
     const newFloor = new Floor(
       this.currentFloorId,
       { x: prevFloor.position.x, y: prevFloor.position.y + 5 },
@@ -166,6 +176,13 @@ export class Game {
    * Release floor from crane
    */
   releaseFloor() {
+    // Start background music on first interaction (browser autoplay policy)
+    if (!this.bgmStarted) {
+      this.audioManager.playBGM('assets/audio/BGM.mp3', 0.3);
+      this.bgmStarted = true;
+      console.log('Background music started');
+    }
+
     const floor = this.crane.releaseFloor();
     if (!floor) return;
 
@@ -175,17 +192,32 @@ export class Game {
     // Get previous floor for judgment
     const prevFloor = this.floors[this.floors.length - 1];
 
-    // Calculate judgment using relative position
-    // Get tower top visual position (including all visual offsets)
+    // Dual judgment system: relative position + absolute overlap
+    // 1. Relative position judgment (tracking visual position)
     const towerTopVisualX = this.getTowerTopVisualPosition();
-    const offset = Math.abs(this.crane.position.x - towerTopVisualX);
+    const relativeOffset = Math.abs(this.crane.position.x - towerTopVisualX);
 
-    // Calculate judgment based on offset
-    const result = Physics.calculateOverlapByOffset(offset, prevFloor.width);
-    const judgment = this.judgmentSystem.judge(result.grade, floor, prevFloor);
+    // Calculate average instability of top 5 floors for judgment strictness
+    let avgInstability = 0;
+    if (this.floors.length >= 5) {
+      const topFloors = this.floors.slice(-5);
+      avgInstability = topFloors.reduce((sum, f) => sum + (f.instability || 0), 0) / topFloors.length;
+    } else if (this.floors.length > 0) {
+      avgInstability = this.floors.reduce((sum, f) => sum + (f.instability || 0), 0) / this.floors.length;
+    }
+
+    const relativeResult = Physics.calculateOverlapByOffset(relativeOffset, prevFloor.width, avgInstability);
+
+    // 2. Absolute overlap judgment (physical reasonableness)
+    const absoluteResult = Physics.calculateOverlap(floor, prevFloor);
+
+    // 3. Take the worse grade of the two
+    const finalGrade = this.getWorseGrade(relativeResult.grade, absoluteResult.grade);
 
     // Debug logging
-    console.log(`[Judgment] TowerTopVisual: ${towerTopVisualX.toFixed(3)}, BlockX: ${this.crane.position.x.toFixed(3)}, RelativeOffset: ${offset.toFixed(3)}, Grade: ${result.grade}`);
+    console.log(`[Judgment] Relative: ${relativeResult.grade} (offset: ${relativeOffset.toFixed(3)}), Absolute: ${absoluteResult.grade} (overlap: ${absoluteResult.overlap_width.toFixed(3)}), Instability: ${avgInstability.toFixed(1)}, Final: ${finalGrade}`);
+
+    const judgment = this.judgmentSystem.judge(finalGrade, floor, prevFloor);
 
     // Update combo
     this.comboSystem.update(judgment.grade);
@@ -251,7 +283,7 @@ export class Game {
     // Add floor to tower
     this.floors.push(floor);
 
-    // 质心倒塌机制已移除 - 只保留单次偏移判定
+    // Center of mass collapse disabled - using difficulty scaling instead
     // const collapseResult = Physics.checkCollapse(this.floors);
     // if (collapseResult.collapse) {
     //   this.handleCollapse(collapseResult.breakPoint);
@@ -309,6 +341,8 @@ export class Game {
     this.isRunning = false;
     console.log('Game Over! Final score:', this.score, 'Floors:', this.floors.length);
 
+    this.settingsManager.saveGameRecord(this.score, this.floors.length);
+
     // Show game over overlay
     const gameOverOverlay = document.getElementById('game-over-overlay');
     const finalScore = document.getElementById('final-score');
@@ -348,6 +382,7 @@ export class Game {
     this.isRunning = true;
     this.isPaused = false;
     this.hp = this.maxHp;  // 重置 HP
+    this.bgmStarted = false;
 
     // Reset tower sway
     this.towerSwayAngle = 0;
@@ -449,6 +484,43 @@ export class Game {
   }
 
   /**
+   * Get the worse grade between two judgment grades
+   * Used for dual judgment system (relative + absolute)
+   *
+   * @param {string} grade1 - First grade ('Perfect', 'Great', 'Okay', 'Miss')
+   * @param {string} grade2 - Second grade
+   * @returns {string} The worse grade
+   */
+  getWorseGrade(grade1, grade2) {
+    const gradeOrder = { 'Perfect': 0, 'Great': 1, 'Okay': 2, 'Miss': 3 };
+    return gradeOrder[grade1] > gradeOrder[grade2] ? grade1 : grade2;
+  }
+
+  /**
+   * Calculate instability factor based on top 5 floors alignment
+   * Returns a multiplier (1.0 - 2.0) based on how well aligned the top floors are
+   */
+  calculateInstabilityFactor() {
+    if (this.floors.length < 5) return 1.0;
+
+    // Get top 5 floors
+    const topFloors = this.floors.slice(-5);
+
+    // Calculate average absolute offset from center (x=0)
+    const avgOffset = topFloors.reduce((sum, floor) => {
+      return sum + Math.abs(floor.position.x);
+    }, 0) / topFloors.length;
+
+    // Convert to instability factor (1.0 - 2.0) - 加强权重
+    // avgOffset = 0 → factor = 1.0 (perfect alignment)
+    // avgOffset = 1.0 → factor = 1.5 (moderate misalignment)
+    // avgOffset = 2.0 → factor = 2.0 (severe misalignment, wobble doubles)
+    const factor = 1.0 + Math.min(avgOffset / 2.0, 1.0) * 1.0;
+
+    return factor;
+  }
+
+  /**
    * Apply sway visuals using snake wobble effect
    * Each floor has independent phase, creating a snake-like twisting motion
    */
@@ -458,8 +530,8 @@ export class Game {
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
-      // 新手保护：前5层（index 0-4）不应用任何晃动和偏移效果
-      if (index < 5) {
+      // 新手保护：前2层（index 0-1）不应用任何晃动和偏移效果
+      if (index < 2) {
         floor.sprite.rotation.z = 0;
         floor.sprite.position.x = floor.position.x;
         floor.sprite.position.y = floor.position.y;
@@ -497,8 +569,8 @@ export class Game {
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
-      // 新手保护：前5层（index 0-4）不产生垂直振荡
-      if (index < 5) {
+      // 新手保护：前2层（index 0-1）不产生垂直振荡
+      if (index < 2) {
         floor.verticalOffset = 0;
         floor.verticalVelocity = 0;
         floor.isStable = true;
@@ -531,8 +603,8 @@ export class Game {
     this.floors.forEach((floor, index) => {
       if (!floor.sprite) return;
 
-      // 新手保护：前5层（index 0-4）不产生着陆旋转
-      if (index < 5) {
+      // 新手保护：前2层（index 0-1）不产生着陆旋转
+      if (index < 2) {
         floor.landingRotation = 0;
         floor.landingRotationVelocity = 0;
         floor.landingRotationStable = true;
@@ -639,6 +711,18 @@ export class Game {
         // Update snake wobble time
         this.snakeWobbleTime += deltaTime;
 
+        // Get current phase and base wobble parameters
+        const phase = this.phaseManager.getCurrentPhase(this.floors.length);
+        const difficultyParams = this.phaseManager.getDifficultyParams(phase);
+
+        // Calculate instability factor based on top 5 floors alignment
+        const instabilityFactor = this.calculateInstabilityFactor();
+
+        // Calculate dynamic wobble parameters
+        // Final = Base (from phase) × Instability Factor (from alignment)
+        const dynamicAmplitude = SNAKE_WOBBLE.AMPLITUDE * difficultyParams.wobbleAmplitude * instabilityFactor;
+        const dynamicFrequency = SNAKE_WOBBLE.FREQUENCY * difficultyParams.wobbleFrequency * instabilityFactor;
+
         // Calculate accumulated offset
         this.accumulatedOffset = Physics.calculateAccumulatedOffset(
           this.floors,
@@ -647,28 +731,31 @@ export class Game {
 
         // Calculate snake wobble offset for each floor
         this.floors.forEach((floor, index) => {
-          // 新手保护：前5层（index 0-4）不产生蛇形扭动
-          if (index < 5) {
-            floor.snakeWobbleOffset = { x: 0, rotation: 0 };
-            return;
-          }
+          // 新手保护：前2层（index 0-1）减弱蛇形扭动效果（30%强度）
+          const protectionFactor = index < 2 ? 0.3 : 1.0;
 
-          floor.snakeWobbleOffset = Physics.calculateSnakeWobbleOffset(
+          const wobbleOffset = Physics.calculateSnakeWobbleOffset(
             index,
             this.floors.length,
             this.accumulatedOffset,
             this.snakeWobbleTime,
             {
-              amplitude: SNAKE_WOBBLE.AMPLITUDE,
-              frequency: SNAKE_WOBBLE.FREQUENCY,
+              amplitude: dynamicAmplitude,
+              frequency: dynamicFrequency,
               phaseDelta: SNAKE_WOBBLE.PHASE_DELTA
             }
           );
+
+          // 应用保护系数
+          floor.snakeWobbleOffset = {
+            x: wobbleOffset.x * protectionFactor,
+            rotation: wobbleOffset.rotation * protectionFactor
+          };
         });
 
         // Debug logging (every 5 floors)
         if (this.floors.length % 5 === 0 && Math.abs(this.accumulatedOffset) > 0.01) {
-          console.log(`[Snake Wobble] Floors: ${this.floors.length}, AccumulatedOffset: ${this.accumulatedOffset.toFixed(3)}, Time: ${this.snakeWobbleTime.toFixed(2)}`);
+          console.log(`[Snake Wobble] Floors: ${this.floors.length}, Phase: ${phase}, InstabilityFactor: ${instabilityFactor.toFixed(2)}, DynamicAmp: ${dynamicAmplitude.toFixed(2)}, DynamicFreq: ${dynamicFrequency.toFixed(2)}, AccumulatedOffset: ${this.accumulatedOffset.toFixed(3)}`);
         }
       }
 
@@ -685,9 +772,10 @@ export class Game {
       this.updateInstabilityJitter(deltaTime);
     }
 
-    // Update crane position
+    // Update crane position with instability factor
     const prevFloor = this.floors[this.floors.length - 1];
-    this.crane.update(deltaTime, prevFloor.position.x, prevFloor.position.y);
+    const instabilityFactor = this.calculateInstabilityFactor();
+    this.crane.update(deltaTime, prevFloor.position.y, instabilityFactor);
 
     // Update crane floor position if attached
     if (this.crane.currentFloor) {

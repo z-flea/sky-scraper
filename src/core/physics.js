@@ -57,11 +57,21 @@ export class Physics {
     // Phase = ωt + i×δ
     const phase = frequency * time + floorIndex * phaseDelta;
 
+    // 基础摆动幅度（不依赖累积偏移）
+    // 这确保即使楼层位置差很小，也能看到明显的蛇形扭动效果
+    const baseAmplitude = 0.3;
+
+    // 累积偏移放大系数（将累积偏移转换为额外的摆动幅度）
+    const amplificationFactor = 0.15;
+
+    // 总摆动幅度 = 基础幅度 + 累积偏移放大
+    const totalAmplitude = baseAmplitude + Math.abs(accumulatedOffset) * amplificationFactor;
+
     // Horizontal offset
-    const wobbleX = accumulatedOffset * amplitude * Math.sin(phase);
+    const wobbleX = totalAmplitude * amplitude * Math.sin(phase);
 
     // Rotation angle (based on adjacent floor offset difference)
-    const wobbleRotation = accumulatedOffset * amplitude * Math.cos(phase) * phaseDelta;
+    const wobbleRotation = totalAmplitude * amplitude * Math.cos(phase) * phaseDelta;
 
     return { x: wobbleX, rotation: wobbleRotation };
   }
@@ -99,9 +109,11 @@ export class Physics {
     const offset = Math.abs(currentFloor.position.x - previousFloor.position.x);
     const W = previousFloor.width;
 
-    if (offset < 0.05 * W) return { grade: 'Perfect', overlap_width };
-    if (offset < 0.20 * W) return { grade: 'Great', overlap_width };
-    if (offset < 0.50 * W) return { grade: 'Okay', overlap_width };
+    // 方案 A1：温和收紧判定窗口（-20%）
+    // Perfect: 5% → 4%, Great: 20% → 16%, Okay: 50% → 45%
+    if (offset < 0.04 * W) return { grade: 'Perfect', overlap_width };
+    if (offset < 0.16 * W) return { grade: 'Great', overlap_width };
+    if (offset < 0.45 * W) return { grade: 'Okay', overlap_width };
     return { grade: 'Miss', overlap_width: 0 };
   }
 
@@ -111,14 +123,25 @@ export class Physics {
    *
    * @param {number} offset - Absolute offset between block and tower top
    * @param {number} baseWidth - Width of the base floor
+   * @param {number} instability - Current instability value (0-100+), affects judgment strictness
    * @returns {object} {grade: 'Perfect'|'Great'|'Okay'|'Miss'}
    */
-  static calculateOverlapByOffset(offset, baseWidth) {
+  static calculateOverlapByOffset(offset, baseWidth, instability = 0) {
     const W = baseWidth;
 
-    if (offset < 0.05 * W) return { grade: 'Perfect' };
-    if (offset < 0.20 * W) return { grade: 'Great' };
-    if (offset < 0.50 * W) return { grade: 'Okay' };
+    // Calculate instability factor (1.0 - 1.3)
+    // Higher instability = stricter judgment (smaller thresholds)
+    const instabilityFactor = 1.0 + Math.min(instability, 100) / 100 * 0.3;
+
+    // Adjust thresholds based on instability
+    // Divide by instabilityFactor to make thresholds smaller (stricter)
+    const perfectThreshold = 0.05 * W / instabilityFactor;
+    const greatThreshold = 0.20 * W / instabilityFactor;
+    const okayThreshold = 0.50 * W / instabilityFactor;
+
+    if (offset < perfectThreshold) return { grade: 'Perfect' };
+    if (offset < greatThreshold) return { grade: 'Great' };
+    if (offset < okayThreshold) return { grade: 'Okay' };
     return { grade: 'Miss' };
   }
 
