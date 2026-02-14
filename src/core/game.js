@@ -15,10 +15,12 @@ import { ComboSystem } from '../systems/combo.js';
 import { PhaseManager } from '../systems/phase.js';
 import { AudioManager } from '../assets/audio_manager.js';
 import { SettingsManager } from '../ui/settings.js';
+import { JudgmentFeedback } from '../ui/judgment_feedback.js';
+import { ComboDisplay } from '../ui/combo_display.js';
 import { SNAKE_WOBBLE, VERTICAL_OSCILLATION, LANDING_ROTATION } from '../../config/physics_params.js';
 
 // 楼层显示缩放比例
-const FLOOR_DISPLAY_SCALE = 0.6;
+const FLOOR_DISPLAY_SCALE = 0.51;
 
 export class Game {
   constructor(canvas) {
@@ -51,6 +53,8 @@ export class Game {
     this.phaseManager = new PhaseManager();
     this.audioManager = new AudioManager();
     this.settingsManager = new SettingsManager(this.audioManager);
+    this.judgmentFeedback = new JudgmentFeedback();
+    this.comboDisplay = new ComboDisplay();
     this.bgmStarted = false;
 
     // Timing
@@ -136,9 +140,13 @@ export class Game {
    * Place the first floor (id = 0)
    */
   placeFirstFloor() {
-    // 地基位置：画面底部 1/5 位置（相机范围 -10 到 10，总高度 20）
-    const groundY = -10 + 20 * 0.2; // = -6
-    const firstFloor = new Floor(0, { x: 0, y: groundY }, 4.0, 0.5, 1);
+    // 地基位置：距离画面底部高度为 1（相机范围 -10 到 10，总高度 20）
+    const groundY = -10 + 1; // = -9
+    // 地基尺寸：根据裁剪后的 foundation.png 实际内容（草地平台部分）
+    // 纹理裁剪为底部 65%，实际宽高比约为 2.82:1，放大 3 倍
+    const foundationWidth = 5.5 * 3;
+    const foundationHeight = 1.95 * 3;
+    const firstFloor = new Floor(0, { x: 0, y: groundY }, foundationWidth, foundationHeight, 1);
     firstFloor.isStable = true;
     this.floors.push(firstFloor);
     this.sceneManager.addFloor(firstFloor);
@@ -159,10 +167,19 @@ export class Game {
     const difficultyParams = this.phaseManager.getDifficultyParams(phase);
     this.crane.updateDifficulty(difficultyParams);
 
+    // Get width bonus from combo system (5 Combo effect)
+    const widthBonus = this.comboSystem.getWidthBonus();
+    const baseWidth = 4.0;
+    const finalWidth = baseWidth * (1 + widthBonus);
+
+    if (widthBonus > 0) {
+      console.log(`[Combo] Applying width bonus: ${baseWidth} → ${finalWidth.toFixed(2)} (+${(widthBonus * 100).toFixed(0)}%)`);
+    }
+
     const newFloor = new Floor(
       this.currentFloorId,
       { x: prevFloor.position.x, y: prevFloor.position.y + 5 },
-      4.0,
+      finalWidth,
       4.0,
       phase
     );
@@ -178,7 +195,7 @@ export class Game {
   releaseFloor() {
     // Start background music on first interaction (browser autoplay policy)
     if (!this.bgmStarted) {
-      this.audioManager.playBGM('assets/audio/BGM.mp3', 0.3);
+      this.audioManager.playBGM('assets/audio/BGM.mp3');
       this.bgmStarted = true;
       console.log('Background music started');
     }
@@ -193,9 +210,10 @@ export class Game {
     const prevFloor = this.floors[this.floors.length - 1];
 
     // Dual judgment system: relative position + absolute overlap
-    // 1. Relative position judgment (tracking visual position)
-    const towerTopVisualX = this.getTowerTopVisualPosition();
-    const relativeOffset = Math.abs(this.crane.position.x - towerTopVisualX);
+    // 1. Relative position judgment (using logical position, not visual position)
+    // Visual effects (snake wobble) should not affect judgment
+    const towerTopLogicalX = prevFloor.position.x;
+    const relativeOffset = Math.abs(this.crane.position.x - towerTopLogicalX);
 
     // Calculate average instability of top 5 floors for judgment strictness
     let avgInstability = 0;
@@ -219,11 +237,65 @@ export class Game {
 
     const judgment = this.judgmentSystem.judge(finalGrade, floor, prevFloor);
 
-    // Update combo
-    this.comboSystem.update(judgment.grade);
+    // 第一层楼房（id=1）不参与连击系统
+    let comboResult;
+    if (floor.id === 1) {
+      // 第一层不更新连击，返回默认状态
+      comboResult = {
+        perfectComboCount: 0,
+        milestone: null,
+        broken: false,
+        perfectWindowActive: false,
+        perfectWindowTimeLeft: 0,
+        overrideGrade: null
+      };
+    } else {
+      // 正常更新连击（传入 deltaTime 为 0，因为这里只是判定时刻）
+      comboResult = this.comboSystem.update(judgment.grade, 0);
+    }
 
-    // Update score
-    this.score += judgment.points;
+    // 如果时间窗口激活且判定被覆盖为 Perfect
+    let displayGrade = judgment.grade;
+    let displayPoints = judgment.points;
+
+    if (comboResult.overrideGrade === 'Perfect') {
+      displayGrade = 'Perfect';
+      displayPoints = this.judgmentSystem.judgmentRules.Perfect.points;
+      floor.inPerfectWindow = true;
+
+      // 为时间窗口内的房子添加发光效果
+      if (floor.sprite) {
+        this.sceneManager.addPerfectWindowGlow(floor);
+      }
+
+      console.log(`[Combo] Grade overridden: ${judgment.grade} → Perfect (window active)`);
+    } else {
+      floor.inPerfectWindow = false;
+    }
+
+    // 显示判定反馈（带分数和 Perfect 连击数）- 第一层楼房不显示判定
+    // 如果在 Perfect 窗口内且判定被覆盖，不显示判定特效
+    if (floor.id !== 1 && !comboResult.overrideGrade) {
+      this.judgmentFeedback.show(displayGrade, null, displayPoints, comboResult.perfectComboCount);
+    }
+
+    // Update perfect timer display
+    const windowStatus = this.comboSystem.getPerfectWindowStatus();
+    this.comboDisplay.updatePerfectTimer(windowStatus);
+
+    // Apply combo milestone effects
+    if (comboResult.milestone) {
+      this.comboDisplay.showMilestone(comboResult.milestone);
+
+      if (comboResult.milestone.type === 'steady') {
+        this.comboSystem.applySteadyEffect(this.floors);
+      } else if (comboResult.milestone.type === 'architect') {
+        this.comboSystem.applyArchitectEffect(this.floors);
+      }
+    }
+
+    // Update score (使用覆盖后的分数)
+    this.score += displayPoints;
 
     // Handle Miss judgment - floor falls
     if (judgment.grade === 'Miss') {
@@ -406,6 +478,9 @@ export class Game {
     // Reset combo
     this.comboSystem.resetCombo();
 
+    // Reset combo display
+    this.comboDisplay.clear();
+
     // Reset camera
     this.cameraController.reset();
 
@@ -427,10 +502,37 @@ export class Game {
     document.getElementById('score-display').textContent = `Score: ${this.score}`;
     document.getElementById('floor-count').textContent = `Floor: ${this.floors.length}`;
 
-    // 更新 HP 显示
+    // 更新红心 HP 显示
     const hpDisplay = document.getElementById('hp-display');
     if (hpDisplay) {
-      hpDisplay.textContent = `HP: ${this.hp}`;
+      const hearts = hpDisplay.querySelectorAll('.heart');
+      hearts.forEach((heart, index) => {
+        if (index < this.hp) {
+          heart.classList.remove('empty');
+          heart.classList.remove('flash');
+        } else {
+          heart.classList.add('empty');
+        }
+      });
+    }
+  }
+
+  /**
+   * 触发 HP 减少动画
+   */
+  triggerHPLoss() {
+    const hpDisplay = document.getElementById('hp-display');
+    if (hpDisplay) {
+      const hearts = hpDisplay.querySelectorAll('.heart');
+      const lostHeartIndex = this.hp; // 当前 HP 对应的是刚失去的红心索引
+      if (lostHeartIndex >= 0 && lostHeartIndex < hearts.length) {
+        const lostHeart = hearts[lostHeartIndex];
+        lostHeart.classList.add('flash');
+        // 动画结束后移除 flash 类
+        setTimeout(() => {
+          lostHeart.classList.remove('flash');
+        }, 500);
+      }
     }
   }
 
@@ -711,6 +813,14 @@ export class Game {
    * Update game state
    */
   update(deltaTime) {
+    // Update combo system (perfect window countdown)
+    this.comboSystem.update(null, deltaTime);
+    const windowStatus = this.comboSystem.getPerfectWindowStatus();
+    this.comboDisplay.updatePerfectTimer(windowStatus);
+
+    // Update scene animations (clouds, etc.) - pass window status
+    this.sceneManager.updateAnimations(deltaTime, this.floors, windowStatus.active);
+
     // Update falling floor if exists
     if (this.fallingFloor) {
       this.updateFallingFloor(deltaTime);
@@ -838,6 +948,7 @@ export class Game {
 
       // 扣除 1 HP
       this.hp--;
+      this.triggerHPLoss(); // 触发红心闪动动画
       this.updateUI();
 
       // 检查是否 Game Over

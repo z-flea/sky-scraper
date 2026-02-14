@@ -42,7 +42,7 @@ export class AudioManager {
   /**
    * Play background music
    */
-  playBGM(path, volume = 0.5) {
+  playBGM(path, volume = null) {
     if (this.isMuted) return;
 
     if (this.bgm) {
@@ -50,7 +50,9 @@ export class AudioManager {
     }
 
     this.bgm = new Audio(path);
-    this.bgmVolume = volume;
+    if (volume !== null) {
+      this.bgmVolume = volume;
+    }
     this.bgm.volume = this.bgmVolume;
     this.bgm.loop = true;
     this.bgm.play().catch(e => console.error('Error playing BGM:', e));

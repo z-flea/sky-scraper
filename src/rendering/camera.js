@@ -25,9 +25,9 @@ export class CameraController {
     // Get the top floor
     const topFloor = floors[floors.length - 1];
 
-    // 当楼层数量较少时（<= 3 层），相机保持在初始位置 y=0
-    // 这样地基会保持在画面底部，不会"弹回"中间
-    if (floors.length <= 3) {
+    // 当楼层数量较少时（<= 2 层），相机保持在初始位置 y=0
+    // 从第2层开始跟随，过渡更平滑（第2层时只需移动1个单位）
+    if (floors.length <= 2) {
       this.targetY = 0;
     } else {
       // 楼层较多时，相机跟随顶层楼层

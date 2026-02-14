@@ -54,8 +54,9 @@ export class Physics {
   static calculateSnakeWobbleOffset(floorIndex, totalFloors, accumulatedOffset, time, params) {
     const { amplitude, frequency, phaseDelta } = params;
 
-    // Phase = ωt + i×δ
-    const phase = frequency * time + floorIndex * phaseDelta;
+    // Phase = ωt (synchronized swaying - all floors use same phase)
+    // 移除 floorIndex * phaseDelta 项，实现同步摆动
+    const phase = frequency * time;
 
     // 基础摆动幅度（不依赖累积偏移）
     // 这确保即使楼层位置差很小，也能看到明显的蛇形扭动效果
@@ -67,11 +68,13 @@ export class Physics {
     // 总摆动幅度 = 基础幅度 + 累积偏移放大
     const totalAmplitude = baseAmplitude + Math.abs(accumulatedOffset) * amplificationFactor;
 
-    // Horizontal offset
+    // Horizontal offset (all floors move in sync)
     const wobbleX = totalAmplitude * amplitude * Math.sin(phase);
 
-    // Rotation angle (based on adjacent floor offset difference)
-    const wobbleRotation = totalAmplitude * amplitude * Math.cos(phase) * phaseDelta;
+    // Rotation angle (dynamic coefficient based on accumulated offset)
+    // 塔越歪，旋转越明显，符合物理直觉
+    const rotationFactor = 0.05 + Math.abs(accumulatedOffset) * 0.02;
+    const wobbleRotation = totalAmplitude * amplitude * Math.cos(phase) * rotationFactor;
 
     return { x: wobbleX, rotation: wobbleRotation };
   }
