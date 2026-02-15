@@ -40,21 +40,21 @@ export class ComboDisplay {
     this.starIcon = document.createElement('img');
     this.starIcon.src = 'assets/sprites/dom/star.PNG';
     this.starIcon.style.cssText = `
-      width: 32px;
-      height: 32px;
-      filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
+      width: 24px;
+      height: 24px;
+      filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
       animation: star-pulse 1s ease-in-out infinite;
     `;
 
     this.starText = document.createElement('div');
     this.starText.textContent = 'PERFECT WINDOW';
     this.starText.style.cssText = `
-      font-size: 18px;
+      font-size: 16px;
       font-weight: bold;
       color: #FFD700;
-      text-shadow: 0 0 10px rgba(255, 215, 0, 0.8), 0 2px 4px rgba(0,0,0,0.5);
+      text-shadow: 0 0 8px rgba(255, 215, 0, 0.8), 0 2px 4px rgba(0,0,0,0.5);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      letter-spacing: 2px;
+      letter-spacing: 1px;
     `;
 
     this.starContainer.appendChild(this.starIcon);
@@ -64,10 +64,10 @@ export class ComboDisplay {
     this.perfectTimerContainer = document.createElement('div');
     this.perfectTimerContainer.id = 'perfect-timer-container';
     this.perfectTimerContainer.style.cssText = `
-      width: 600px;
-      height: 24px;
+      width: 400px;
+      height: 16px;
       background: rgba(0, 0, 0, 0.3);
-      border-radius: 12px;
+      border-radius: 8px;
       overflow: hidden;
       opacity: 0;
       transition: opacity 0.3s;
@@ -115,20 +115,20 @@ export class ComboDisplay {
     `;
 
     const titleStyle = `
-      font-size: 72px;
+      font-size: 48px;
       font-weight: bold;
       color: ${config.color};
-      text-shadow: 0 0 30px ${config.glowColor}, 0 4px 8px rgba(0,0,0,0.5);
+      text-shadow: 0 0 20px ${config.glowColor}, 0 4px 8px rgba(0,0,0,0.5);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      letter-spacing: 4px;
-      margin-bottom: 10px;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
     `;
 
     const descStyle = `
-      font-size: 32px;
+      font-size: 24px;
       font-weight: bold;
       color: ${config.descColor};
-      text-shadow: 0 0 15px ${config.glowColor}, 0 2px 4px rgba(0,0,0,0.3);
+      text-shadow: 0 0 12px ${config.glowColor}, 0 2px 4px rgba(0,0,0,0.3);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     `;
 
