@@ -195,7 +195,7 @@ export class Game {
   releaseFloor() {
     // Start background music on first interaction (browser autoplay policy)
     if (!this.bgmStarted) {
-      this.audioManager.playBGM('assets/audio/BGM.mp3');
+      this.audioManager.playBGM('/assets/audio/BGM.mp3');
       this.bgmStarted = true;
       console.log('Background music started');
     }
