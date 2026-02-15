@@ -525,11 +525,26 @@ export class SceneManager {
    * Create balloons that move vertically (up and down)
    */
   createBalloons() {
+    setTimeout(() => {
+      this._createBalloonsInternal();
+    }, 1000);
+  }
+
+  _createBalloonsInternal() {
     const viewSize = 20;
     const screenAspect = window.innerWidth / window.innerHeight;
     const viewWidth = viewSize * screenAspect;
 
-    // Load balloon texture
+    const bg3 = this.backgroundSprites[3];
+
+    if (!bg3 || !bg3.userData.baseY) {
+      console.log('背景图片还未加载完成，延迟创建气球');
+      setTimeout(() => {
+        this._createBalloonsInternal();
+      }, 500);
+      return;
+    }
+
     this.textureLoader.load(
       '/assets/sprites/dom/balloon.PNG',
       (texture) => {
@@ -538,18 +553,13 @@ export class SceneManager {
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
 
-        // Create multiple balloon sprites at different positions
         const balloonCount = 3;
         const textureAspect = texture.image.width / texture.image.height;
 
-        // 估算 bg3 的 Y 位置范围
-        // bg1 高度约 35.6，bg2 高度约 37.5
-        // bg3 从 bg2 顶部开始，高度约 37.5，所以 bg3 范围约为 y = 63 到 100.5
-        const bg3StartY = 63;
-        const bg3EndY = 101;
+        const bg3StartY = bg3.userData.baseY - bg3.userData.height / 2;
+        const bg3EndY = bg3.userData.baseY + bg3.userData.height / 2;
         const bg3Height = bg3EndY - bg3StartY;
 
-        // 热气球在 bg3 的中部出现（从 30% 到 70% 高度）
         const balloonRangeStart = bg3StartY + bg3Height * 0.3;
         const balloonRangeEnd = bg3StartY + bg3Height * 0.7;
 
@@ -562,19 +572,15 @@ export class SceneManager {
           });
           const balloonSprite = new THREE.Sprite(balloonMaterial);
 
-          // Balloon size (smaller, varied sizes)
           const sizeVariation = 0.7 + Math.random() * 0.3;
           const balloonHeight = viewSize * 0.15 * sizeVariation;
           const balloonWidth = balloonHeight * textureAspect;
           balloonSprite.scale.set(balloonWidth, balloonHeight, 1);
 
-          // Position balloons at different horizontal positions within bg3 range
-          // z = -6 places balloons between background (-10) and floors (0)
           const startX = -viewWidth / 3 + (i * viewWidth * 0.5);
           const centerY = (balloonRangeStart + balloonRangeEnd) / 2;
           balloonSprite.position.set(startX, centerY, -6);
 
-          // Store initial data for animation
           balloonSprite.userData.speed = 0.8 + Math.random() * 0.4;
           balloonSprite.userData.amplitude = 3 + Math.random() * 2;
           balloonSprite.userData.phase = Math.random() * Math.PI * 2;
@@ -598,11 +604,26 @@ export class SceneManager {
    * Create satellites that rotate around Earth (bg4)
    */
   createSatellites() {
+    setTimeout(() => {
+      this._createSatellitesInternal();
+    }, 1000);
+  }
+
+  _createSatellitesInternal() {
     const viewSize = 20;
     const screenAspect = window.innerWidth / window.innerHeight;
     const viewWidth = viewSize * screenAspect;
 
-    // Load satellite texture
+    const bg4 = this.backgroundSprites[4];
+
+    if (!bg4 || !bg4.userData.baseY) {
+      console.log('背景图片还未加载完成，延迟创建卫星');
+      setTimeout(() => {
+        this._createSatellitesInternal();
+      }, 500);
+      return;
+    }
+
     this.textureLoader.load(
       '/assets/sprites/dom/satellite.PNG',
       (texture) => {
@@ -613,18 +634,12 @@ export class SceneManager {
 
         const textureAspect = texture.image.width / texture.image.height;
 
-        // 估算 bg4 的 Y 位置范围
-        // bg1 + bg2 + bg3 约为 110，bg4 从这里开始
-        // bg4 是地球背景，卫星应该在地球附近
-        const bg4StartY = 101;
-        const bg4Height = 40; // 估算值
-        const bg4CenterY = bg4StartY + bg4Height / 2;
+        const bg4CenterY = bg4.userData.baseY;
 
-        // 创建 2 个卫星，左右对称
         const satelliteCount = 2;
         const satellitePositions = [
-          { x: -viewWidth * 0.15, y: bg4CenterY + 3 },  // 左侧卫星，稍微偏上
-          { x: viewWidth * 0.15, y: bg4CenterY - 2 }    // 右侧卫星，稍微偏下
+          { x: -viewWidth * 0.15, y: bg4CenterY + 3 },
+          { x: viewWidth * 0.15, y: bg4CenterY - 2 }
         ];
 
         satellitePositions.forEach((pos, i) => {
@@ -636,18 +651,14 @@ export class SceneManager {
           });
           const satelliteSprite = new THREE.Sprite(satelliteMaterial);
 
-          // Satellite size
           const satelliteHeight = viewSize * 0.12;
           const satelliteWidth = satelliteHeight * textureAspect;
           satelliteSprite.scale.set(satelliteWidth, satelliteHeight, 1);
 
-          // Position satellites
-          // z = -6 places satellites between background (-10) and floors (0)
           satelliteSprite.position.set(pos.x, pos.y, -6);
 
-          // Store initial data for animation
           satelliteSprite.userData.baseY = pos.y;
-          satelliteSprite.userData.rotationSpeed = (i === 0 ? 0.3 : -0.25); // 左右旋转方向相反
+          satelliteSprite.userData.rotationSpeed = (i === 0 ? 0.3 : -0.25);
           satelliteSprite.userData.rotation = 0;
 
           this.scene.add(satelliteSprite);
@@ -667,9 +678,24 @@ export class SceneManager {
    * Create Saturn that rotates in bg5 (space background)
    */
   createSaturn() {
+    setTimeout(() => {
+      this._createSaturnInternal();
+    }, 1000);
+  }
+
+  _createSaturnInternal() {
     const viewSize = 20;
 
-    // Load Saturn texture
+    const bg5 = this.backgroundSprites[5];
+
+    if (!bg5 || !bg5.userData.baseY) {
+      console.log('背景图片还未加载完成，延迟创建土星');
+      setTimeout(() => {
+        this._createSaturnInternal();
+      }, 500);
+      return;
+    }
+
     this.textureLoader.load(
       '/assets/sprites/dom/Saturn.PNG',
       (texture) => {
@@ -680,11 +706,7 @@ export class SceneManager {
 
         const textureAspect = texture.image.width / texture.image.height;
 
-        // 估算 bg5 的 Y 位置范围
-        // bg1 + bg2 + bg3 + bg4 约为 180，bg5 从这里开始
-        const bg5StartY = 180;
-        const bg5Height = 60; // 估算值
-        const bg5CenterY = bg5StartY + bg5Height / 2;
+        const bg5CenterY = bg5.userData.baseY;
 
         const saturnMaterial = new THREE.SpriteMaterial({
           map: texture,
@@ -694,19 +716,15 @@ export class SceneManager {
         });
         this.saturnSprite = new THREE.Sprite(saturnMaterial);
 
-        // Saturn size (larger than stars)
         const saturnHeight = viewSize * 0.35;
         const saturnWidth = saturnHeight * textureAspect;
         this.saturnSprite.scale.set(saturnWidth, saturnHeight, 1);
 
-        // Position Saturn at center of bg5
-        // z = -7 places Saturn between background (-10) and other decorations (-6)
         this.saturnSprite.position.set(0, bg5CenterY, -7);
 
-        // Store initial data for animation
         this.saturnSprite.userData.baseY = bg5CenterY;
         this.saturnSprite.userData.rotation = 0;
-        this.saturnSprite.userData.rotationSpeed = 0.3; // 顺时针旋转速度
+        this.saturnSprite.userData.rotationSpeed = 0.3;
 
         this.scene.add(this.saturnSprite);
 
