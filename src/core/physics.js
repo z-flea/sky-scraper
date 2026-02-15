@@ -9,6 +9,7 @@ import {
   VERTICAL_OSCILLATION,
   LANDING_ROTATION
 } from '../../config/physics_params.js';
+import { performanceConfig } from '../config/performance_config.js';
 
 export class Physics {
   /**
@@ -132,15 +133,13 @@ export class Physics {
   static calculateOverlapByOffset(offset, baseWidth, instability = 0) {
     const W = baseWidth;
 
-    // Calculate instability factor (1.0 - 1.3)
-    // Higher instability = stricter judgment (smaller thresholds)
+    const leniency = performanceConfig.getDifficultyConfig().judgmentLeniency;
+
     const instabilityFactor = 1.0 + Math.min(instability, 100) / 100 * 0.3;
 
-    // Adjust thresholds based on instability
-    // Divide by instabilityFactor to make thresholds smaller (stricter)
-    const perfectThreshold = 0.05 * W / instabilityFactor;
-    const greatThreshold = 0.20 * W / instabilityFactor;
-    const okayThreshold = 0.50 * W / instabilityFactor;
+    const perfectThreshold = 0.05 * W / instabilityFactor * leniency;
+    const greatThreshold = 0.20 * W / instabilityFactor * leniency;
+    const okayThreshold = 0.50 * W / instabilityFactor * leniency;
 
     if (offset < perfectThreshold) return { grade: 'Perfect' };
     if (offset < greatThreshold) return { grade: 'Great' };

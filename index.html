@@ -68,10 +68,27 @@
       pointer-events: none;
     }
 
+    @media (max-width: 768px) {
+      #bottom-ui {
+        bottom: 20px;
+        padding: 0 20px;
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+      }
+    }
+
     #left-info {
       display: flex;
       gap: 30px;
       align-items: center;
+    }
+
+    @media (max-width: 768px) {
+      #left-info {
+        gap: 15px;
+        justify-content: center;
+      }
     }
 
     #score-display {
@@ -81,10 +98,22 @@
       text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
     }
 
+    @media (max-width: 768px) {
+      #score-display {
+        font-size: 24px;
+      }
+    }
+
     #floor-count {
       color: #1E90FF;
       font-size: 32px;
       text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    @media (max-width: 768px) {
+      #floor-count {
+        font-size: 22px;
+      }
     }
 
     #right-info {
@@ -93,10 +122,24 @@
       align-items: center;
     }
 
+    @media (max-width: 768px) {
+      #right-info {
+        gap: 15px;
+        justify-content: center;
+      }
+    }
+
     #hp-display {
       display: flex;
       gap: 10px;
       font-size: 48px;
+    }
+
+    @media (max-width: 768px) {
+      #hp-display {
+        font-size: 36px;
+        gap: 8px;
+      }
     }
 
     .heart {
@@ -144,6 +187,14 @@
       box-shadow: 0 10px 40px rgba(0,0,0,0.3);
     }
 
+    @media (max-width: 768px) {
+      #game-over-panel {
+        padding: 30px 20px;
+        margin: 0 20px;
+        max-width: 90%;
+      }
+    }
+
     #game-over-title {
       font-size: 48px;
       font-weight: bold;
@@ -151,10 +202,22 @@
       margin-bottom: 20px;
     }
 
+    @media (max-width: 768px) {
+      #game-over-title {
+        font-size: 32px;
+      }
+    }
+
     #game-over-stats {
       font-size: 24px;
       color: #666;
       margin-bottom: 30px;
+    }
+
+    @media (max-width: 768px) {
+      #game-over-stats {
+        font-size: 18px;
+      }
     }
 
     #restart-button {
@@ -170,6 +233,14 @@
       box-shadow:
         0 4px 15px rgba(240, 147, 251, 0.4),
         0 0 20px rgba(245, 87, 108, 0.3);
+    }
+
+    @media (max-width: 768px) {
+      #restart-button {
+        padding: 12px 30px;
+        font-size: 18px;
+        min-height: 44px;
+      }
     }
 
     #restart-button:hover {
@@ -191,6 +262,14 @@
       transition: all 0.3s;
       pointer-events: all;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    @media (max-width: 768px) {
+      #settings-button {
+        padding: 10px 20px;
+        font-size: 16px;
+        min-height: 44px;
+      }
     }
 
     #settings-button:hover {

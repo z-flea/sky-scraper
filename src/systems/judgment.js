@@ -4,16 +4,18 @@
  * Handles floor placement judgment and scoring
  */
 
+import { performanceConfig } from '../config/performance_config.js';
+
 export class JudgmentSystem {
   constructor() {
-    // 方案 B1：温和增强不稳定度惩罚（+50%）
-    // Great: 5 → 8, Okay: 20 → 30
     this.judgmentRules = {
       Perfect: { points: 10, instabilityChange: -10 },
       Great: { points: 5, instabilityChange: 8 },
       Okay: { points: 3, instabilityChange: 30 },
       Miss: { points: 0, instabilityChange: 0 }
     };
+
+    this.leniencyMultiplier = performanceConfig.getDifficultyConfig().judgmentLeniency;
   }
 
   /**

@@ -18,6 +18,8 @@ import { SettingsManager } from '../ui/settings.js';
 import { JudgmentFeedback } from '../ui/judgment_feedback.js';
 import { ComboDisplay } from '../ui/combo_display.js';
 import { SNAKE_WOBBLE, VERTICAL_OSCILLATION, LANDING_ROTATION } from '../../config/physics_params.js';
+import { deviceDetector } from '../utils/device_detector.js';
+import { TouchController } from '../utils/touch_controller.js';
 
 // 楼层显示缩放比例
 const FLOOR_DISPLAY_SCALE = 0.51;
@@ -60,6 +62,9 @@ export class Game {
     // Timing
     this.lastTime = 0;
 
+    // Touch controller
+    this.touchController = null;
+
     // Input handling
     this.setupInputHandlers();
   }
@@ -68,6 +73,21 @@ export class Game {
    * Setup input event listeners
    */
   setupInputHandlers() {
+    // 触摸控制（移动端）
+    if (deviceDetector.isTouchDevice) {
+      this.touchController = new TouchController(
+        this.canvas,
+        () => {
+          if (!this.isPaused) {
+            this.releaseFloor();
+          }
+        },
+        () => {
+          this.restart();
+        }
+      );
+    }
+
     // Space or Left Click to release floor
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space' && !this.isPaused) {
@@ -100,11 +120,14 @@ export class Game {
       }
     });
 
-    this.canvas.addEventListener('click', () => {
-      if (!this.isPaused) {
-        this.releaseFloor();
-      }
-    });
+    // 鼠标点击（仅桌面端）
+    if (!deviceDetector.isTouchDevice) {
+      this.canvas.addEventListener('click', () => {
+        if (!this.isPaused) {
+          this.releaseFloor();
+        }
+      });
+    }
 
     // Restart button
     const restartButton = document.getElementById('restart-button');

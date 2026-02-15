@@ -4,17 +4,21 @@
  * Handles the swinging mechanical arm that carries floors
  */
 
+import { performanceConfig } from '../config/performance_config.js';
+
 export class Crane {
   constructor() {
-    this.position = { x: 0, y: 10 }; // Starting position
-    this.amplitude = 3.0; // Initial swing amplitude
-    this.angularVelocity = 2.0; // Initial angular velocity (rad/s)
-    this.noiseRange = 0.2; // Noise range (will be multiplied by 2 for [-range, +range])
+    this.position = { x: 0, y: 10 };
+    this.amplitude = 3.0;
+    this.angularVelocity = 2.0;
+    this.noiseRange = 0.2;
     this.time = 0;
     this.noise = 0;
-    this.noiseUpdateInterval = 0.5; // Update noise every 0.5s
+    this.noiseUpdateInterval = 0.5;
     this.noiseTimer = 0;
-    this.currentFloor = null; // Floor being carried
+    this.currentFloor = null;
+
+    this.difficultyMultiplier = performanceConfig.getDifficultyConfig().craneSpeedMultiplier;
   }
 
   /**
@@ -30,20 +34,15 @@ export class Crane {
     this.time += deltaTime;
     this.noiseTimer += deltaTime;
 
-    // Update noise periodically
     if (this.noiseTimer >= this.noiseUpdateInterval) {
-      this.noise = (Math.random() - 0.5) * this.noiseRange * 2; // Range: [-noiseRange, +noiseRange]
+      this.noise = (Math.random() - 0.5) * this.noiseRange * 2;
       this.noiseTimer = 0;
     }
 
-    // Calculate arm position with dynamic angular velocity based on instability
-    // Higher instability = faster swing = harder to track
-    const dynamicAngularVelocity = this.angularVelocity * instabilityFactor;
+    const dynamicAngularVelocity = this.angularVelocity * instabilityFactor * this.difficultyMultiplier;
     this.position.x = 0 + this.amplitude * Math.sin(dynamicAngularVelocity * this.time) + this.noise;
 
-    // Update Y position to stay above the current floor
-    // 吊臂应该在当前楼层上方，当前楼层在 prevFloorY + 5，所以吊臂在 prevFloorY + 8
-    this.position.y = prevFloorY + 8; // 8 units above the previous floor (3 units above current floor)
+    this.position.y = prevFloorY + 8;
   }
 
   /**
