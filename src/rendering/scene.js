@@ -902,8 +902,8 @@ export class SceneManager {
     this.saturnSprite.userData.rotation += deltaTime * this.saturnSprite.userData.rotationSpeed;
     this.saturnSprite.material.rotation = this.saturnSprite.userData.rotation;
 
-    // Apply parallax effect to Y position (Saturn follows camera slower than background)
-    const parallaxFactor = 0.15;
+    // Apply parallax effect to Y position (Saturn is part of bg5, should move with background)
+    const parallaxFactor = 0.3;
     const cameraOffsetY = this.camera.position.y * parallaxFactor;
     this.saturnSprite.position.y = this.saturnSprite.userData.baseY + cameraOffsetY;
   }
