@@ -43,8 +43,8 @@ class PerformanceConfig {
         updateRate: 30,
       },
       difficulty: {
-        craneSpeedMultiplier: 0.85,
-        judgmentLeniency: 1.15,
+        craneSpeedMultiplier: 1.0,
+        judgmentLeniency: 1.0,
       },
     };
   }
