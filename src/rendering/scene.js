@@ -409,9 +409,34 @@ export class SceneManager {
    * Create clouds that move horizontally across the screen
    */
   createClouds() {
+    // 延迟创建云，等待背景图片加载完成
+    // 使用 setTimeout 确保背景图片的 userData 已经设置
+    setTimeout(() => {
+      this._createCloudsInternal();
+    }, 1000);
+  }
+
+  _createCloudsInternal() {
     const viewSize = 20;
     const screenAspect = window.innerWidth / window.innerHeight;
     const viewWidth = viewSize * screenAspect;
+
+    // 从 backgroundSprites 中获取 bg2 和 bg3 的实际位置
+    // backgroundSprites[0] 是缓冲背景 (bg0)
+    // backgroundSprites[1] 是 bg1
+    // backgroundSprites[2] 是 bg2
+    // backgroundSprites[3] 是 bg3
+    const bg2 = this.backgroundSprites[2];
+    const bg3 = this.backgroundSprites[3];
+
+    // 如果背景还没加载完成，再次延迟
+    if (!bg2 || !bg3 || !bg2.userData.baseY || !bg3.userData.baseY) {
+      console.log('背景图片还未加载完成，延迟创建云');
+      setTimeout(() => {
+        this._createCloudsInternal();
+      }, 500);
+      return;
+    }
 
     // Load cloud texture
     this.textureLoader.load(
@@ -424,22 +449,22 @@ export class SceneManager {
 
         const textureAspect = texture.image.width / texture.image.height;
 
-        // 定义云的生成区域：bg2 和 bg3
+        // 使用实际的背景图片位置来定义云的生成区域
         const cloudRegions = [
           {
             name: 'bg2',
-            startY: 26,
-            endY: 63,
-            rangeStart: 0.5,  // 从 50% 高度开始
-            rangeEnd: 1.0,    // 到顶部
+            startY: bg2.userData.baseY - bg2.userData.height / 2,
+            endY: bg2.userData.baseY + bg2.userData.height / 2,
+            rangeStart: 0.5,
+            rangeEnd: 1.0,
             count: 4
           },
           {
             name: 'bg3',
-            startY: 63,
-            endY: 101,
-            rangeStart: 0.0,  // 从底部开始
-            rangeEnd: 1.0,    // 到顶部（全背景）
+            startY: bg3.userData.baseY - bg3.userData.height / 2,
+            endY: bg3.userData.baseY + bg3.userData.height / 2,
+            rangeStart: 0.0,
+            rangeEnd: 1.0,
             count: 6
           }
         ];
@@ -461,24 +486,19 @@ export class SceneManager {
             });
             const cloudSprite = new THREE.Sprite(cloudMaterial);
 
-            // Cloud size (smaller, varied sizes)
             const sizeVariation = 0.8 + Math.random() * 0.4;
             const cloudWidth = viewWidth * 0.25 * sizeVariation;
             const cloudHeight = cloudWidth / textureAspect;
             cloudSprite.scale.set(cloudWidth, cloudHeight, 1);
 
-            // Position clouds at different heights within region
-            // 将高度范围分成 count 个区间，每个云在自己的区间内随机生成
             const segmentHeight = cloudRangeHeight / region.count;
             const segmentStart = cloudRangeStart + i * segmentHeight;
             const segmentEnd = segmentStart + segmentHeight;
             const startY = segmentStart + Math.random() * (segmentEnd - segmentStart);
 
-            // z = -6 places clouds between background (-10) and floors (0)
             const startX = -viewWidth / 2 - cloudWidth + (i * viewWidth * 1.5 / region.count);
             cloudSprite.position.set(startX, startY, -6);
 
-            // Store initial data for animation
             cloudSprite.userData.speed = 0.3 + Math.random() * 0.3;
             cloudSprite.userData.viewWidth = viewWidth;
             cloudSprite.userData.cloudWidth = cloudWidth;
