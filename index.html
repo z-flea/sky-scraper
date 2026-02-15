@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sky Scraper - 摩天大楼 | 物理堆叠游戏</title>
   <meta name="description" content="Sky Scraper 是一款基于物理引擎的摩天大楼堆叠游戏。精准控制机械臂，建造最高的大楼！挑战 5 个阶段，从城市到星际空间。">
   <meta name="keywords" content="摩天大楼,堆叠游戏,物理游戏,Three.js,WebGL,休闲游戏">
@@ -39,10 +39,15 @@
       overflow: hidden;
       background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
     }
 
     #game-canvas {
